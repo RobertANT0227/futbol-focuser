@@ -1,0 +1,296 @@
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import type { TeamStats, MatchData } from '@/lib/types';
+
+const FORM_OPTIONS = ['W', 'D', 'L'] as const;
+const STYLES = ['possession', 'counter', 'pressing', 'low-block'] as const;
+
+function defaultTeam(name: string): TeamStats {
+  return {
+    name,
+    goalsScored: 0, goalsConceded: 0,
+    goalsScoredHome: 0, goalsConcededHome: 0,
+    goalsScoredAway: 0, goalsConcededAway: 0,
+    matchesPlayed: 0,
+    formLast5: ['W', 'D', 'L', 'W', 'D'],
+    formHome: ['W', 'W', 'D', 'W', 'L'],
+    formAway: ['D', 'L', 'W', 'D', 'L'],
+    xG: 0, xGA: 0,
+    shots: 0, shotsOnTarget: 0,
+    possession: 50, dangerousAttacks: 0,
+    corners: 0, cornersPerMatch: 5,
+    cards: 0, cardsPerMatch: 2,
+    fouls: 0,
+    playStyle: 'possession',
+    leaguePosition: 10,
+    totalTeamsInLeague: 20,
+  };
+}
+
+export function defaultMatch(): MatchData {
+  return {
+    homeTeam: defaultTeam('Echipa Gazdă'),
+    awayTeam: defaultTeam('Echipa Oaspete'),
+    league: '',
+    leagueAvgGoals: 2.7,
+    leagueAvgCorners: 10,
+    oddsHome: 2.0, oddsDraw: 3.3, oddsAway: 3.5,
+    oddsOver25: 1.85, oddsUnder25: 2.0,
+    oddsBTTSYes: 1.8, oddsBTTSNo: 2.0,
+    oddsOverCorners: 1.85, oddsUnderCorners: 2.0,
+    cornersLine: 10.5,
+    isDerby: false,
+    refereeCardsPerMatch: 4,
+    homeTeamFatigued: false, awayTeamFatigued: false,
+    homeEuropeanMatch: false, awayEuropeanMatch: false,
+  };
+}
+
+interface Props {
+  match: MatchData;
+  onChange: (match: MatchData) => void;
+}
+
+function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: TeamStats) => void; label: string }) {
+  const update = (key: keyof TeamStats, value: any) => onChange({ ...team, [key]: value });
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{label}</h3>
+      
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Nume echipă</Label>
+          <Input value={team.name} onChange={e => update('name', e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Meciuri jucate</Label>
+          <Input type="number" value={team.matchesPlayed} onChange={e => update('matchesPlayed', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Goluri marcate</Label>
+          <Input type="number" value={team.goalsScored} onChange={e => update('goalsScored', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Goluri primite</Label>
+          <Input type="number" value={team.goalsConceded} onChange={e => update('goalsConceded', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">xG</Label>
+          <Input type="number" step="0.1" value={team.xG} onChange={e => update('xG', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Goluri acasă marcate</Label>
+          <Input type="number" value={team.goalsScoredHome} onChange={e => update('goalsScoredHome', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Goluri acasă primite</Label>
+          <Input type="number" value={team.goalsConcededHome} onChange={e => update('goalsConcededHome', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Goluri deplasare marcate</Label>
+          <Input type="number" value={team.goalsScoredAway} onChange={e => update('goalsScoredAway', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Goluri deplasare primite</Label>
+          <Input type="number" value={team.goalsConcededAway} onChange={e => update('goalsConcededAway', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Șuturi</Label>
+          <Input type="number" value={team.shots} onChange={e => update('shots', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Șuturi pe poartă</Label>
+          <Input type="number" value={team.shotsOnTarget} onChange={e => update('shotsOnTarget', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Posesie %</Label>
+          <Input type="number" value={team.possession} onChange={e => update('possession', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Cornere/meci</Label>
+          <Input type="number" step="0.1" value={team.cornersPerMatch} onChange={e => update('cornersPerMatch', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Cartonașe/meci</Label>
+          <Input type="number" step="0.1" value={team.cardsPerMatch} onChange={e => update('cardsPerMatch', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Atacuri periculoase</Label>
+          <Input type="number" value={team.dangerousAttacks} onChange={e => update('dangerousAttacks', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Loc clasament</Label>
+          <Input type="number" value={team.leaguePosition} onChange={e => update('leaguePosition', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Stil de joc</Label>
+          <Select value={team.playStyle} onValueChange={v => update('playStyle', v)}>
+            <SelectTrigger className="bg-secondary border-border">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STYLES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-xs text-muted-foreground">Formă ultimele 5 meciuri</Label>
+        <div className="flex gap-1 mt-1">
+          {team.formLast5.map((f, i) => (
+            <Select key={i} value={f} onValueChange={v => {
+              const newForm = [...team.formLast5];
+              newForm[i] = v as 'W' | 'D' | 'L';
+              update('formLast5', newForm);
+            }}>
+              <SelectTrigger className={`w-14 text-xs font-mono ${f === 'W' ? 'bg-primary/20 text-primary' : f === 'L' ? 'bg-destructive/20 text-destructive' : 'bg-accent/20 text-accent'}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FORM_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function MatchInputForm({ match, onChange }: Props) {
+  const updateHome = (t: TeamStats) => onChange({ ...match, homeTeam: t });
+  const updateAway = (t: TeamStats) => onChange({ ...match, awayTeam: t });
+
+  return (
+    <div className="space-y-6">
+      {/* League & context */}
+      <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Liga & Context</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Liga</Label>
+            <Input value={match.league} onChange={e => onChange({ ...match, league: e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Media goluri ligă</Label>
+            <Input type="number" step="0.1" value={match.leagueAvgGoals} onChange={e => onChange({ ...match, leagueAvgGoals: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Media cornere ligă</Label>
+            <Input type="number" step="0.1" value={match.leagueAvgCorners} onChange={e => onChange({ ...match, leagueAvgCorners: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Echipe în ligă</Label>
+            <Input type="number" value={match.homeTeam.totalTeamsInLeague} onChange={e => {
+              const n = +e.target.value;
+              onChange({ ...match, homeTeam: { ...match.homeTeam, totalTeamsInLeague: n }, awayTeam: { ...match.awayTeam, totalTeamsInLeague: n } });
+            }} className="bg-secondary border-border" />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-6">
+          <div className="flex items-center gap-2">
+            <Switch checked={match.isDerby} onCheckedChange={v => onChange({ ...match, isDerby: v })} />
+            <Label className="text-xs">Derby</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={match.homeTeamFatigued} onCheckedChange={v => onChange({ ...match, homeTeamFatigued: v })} />
+            <Label className="text-xs">Gazdă obosită</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={match.awayTeamFatigued} onCheckedChange={v => onChange({ ...match, awayTeamFatigued: v })} />
+            <Label className="text-xs">Oaspete obosit</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={match.homeEuropeanMatch} onCheckedChange={v => onChange({ ...match, homeEuropeanMatch: v })} />
+            <Label className="text-xs">Gazdă europeană</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch checked={match.awayEuropeanMatch} onCheckedChange={v => onChange({ ...match, awayEuropeanMatch: v })} />
+            <Label className="text-xs">Oaspete europeană</Label>
+          </div>
+        </div>
+      </div>
+
+      {/* Teams side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <TeamForm team={match.homeTeam} onChange={updateHome} label="🏠 Echipa Gazdă" />
+        </div>
+        <div className="rounded-lg border border-border bg-card p-4">
+          <TeamForm team={match.awayTeam} onChange={updateAway} label="✈️ Echipa Oaspete" />
+        </div>
+      </div>
+
+      {/* Odds */}
+      <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Cote Bookmaker</h3>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Cota 1 (Gazdă)</Label>
+            <Input type="number" step="0.01" value={match.oddsHome} onChange={e => onChange({ ...match, oddsHome: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Cota X (Egal)</Label>
+            <Input type="number" step="0.01" value={match.oddsDraw} onChange={e => onChange({ ...match, oddsDraw: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Cota 2 (Oaspete)</Label>
+            <Input type="number" step="0.01" value={match.oddsAway} onChange={e => onChange({ ...match, oddsAway: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Over 2.5</Label>
+            <Input type="number" step="0.01" value={match.oddsOver25} onChange={e => onChange({ ...match, oddsOver25: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Under 2.5</Label>
+            <Input type="number" step="0.01" value={match.oddsUnder25} onChange={e => onChange({ ...match, oddsUnder25: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">BTTS Da</Label>
+            <Input type="number" step="0.01" value={match.oddsBTTSYes} onChange={e => onChange({ ...match, oddsBTTSYes: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">BTTS Nu</Label>
+            <Input type="number" step="0.01" value={match.oddsBTTSNo} onChange={e => onChange({ ...match, oddsBTTSNo: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Linia cornere</Label>
+            <Input type="number" step="0.5" value={match.cornersLine ?? ''} onChange={e => onChange({ ...match, cornersLine: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Over cornere</Label>
+            <Input type="number" step="0.01" value={match.oddsOverCorners ?? ''} onChange={e => onChange({ ...match, oddsOverCorners: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Under cornere</Label>
+            <Input type="number" step="0.01" value={match.oddsUnderCorners ?? ''} onChange={e => onChange({ ...match, oddsUnderCorners: +e.target.value })} className="bg-secondary border-border" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
