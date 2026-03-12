@@ -7,11 +7,9 @@ export interface TeamStats {
   goalsScoredAway: number;
   goalsConcededAway: number;
   matchesPlayed: number;
-  // Form: W/D/L for last 5
   formLast5: ('W' | 'D' | 'L')[];
   formHome: ('W' | 'D' | 'L')[];
   formAway: ('W' | 'D' | 'L')[];
-  // Advanced stats
   xG: number;
   xGA: number;
   shots: number;
@@ -20,12 +18,12 @@ export interface TeamStats {
   dangerousAttacks: number;
   corners: number;
   cornersPerMatch: number;
+  cornersPerMatchHome: number;
+  cornersPerMatchAway: number;
   cards: number;
   cardsPerMatch: number;
   fouls: number;
-  // Style
   playStyle: 'possession' | 'counter' | 'pressing' | 'low-block';
-  // Standing
   leaguePosition: number;
   totalTeamsInLeague: number;
 }
@@ -34,23 +32,16 @@ export interface MatchData {
   homeTeam: TeamStats;
   awayTeam: TeamStats;
   league: string;
-  leagueAvgGoals: number;
-  leagueAvgCorners: number;
-  // Bookmaker odds 1X2
   oddsHome: number;
   oddsDraw: number;
   oddsAway: number;
-  // Over/Under odds
   oddsOver25: number;
   oddsUnder25: number;
-  // BTTS odds
   oddsBTTSYes: number;
   oddsBTTSNo: number;
-  // Corners odds (optional)
   oddsOverCorners?: number;
   oddsUnderCorners?: number;
   cornersLine?: number;
-  // Context
   isDerby: boolean;
   refereeCardsPerMatch?: number;
   homeTeamFatigued: boolean;
@@ -62,9 +53,9 @@ export interface MatchData {
 export interface UserPlan {
   maxRisk: 'low' | 'medium' | 'high';
   bankroll: number;
-  minValue: number; // minimum value % to bet
+  minValue: number;
   preferredBets: ('corners' | 'winner' | 'goals')[];
-  maxStakePercent: number; // max % of bankroll per bet
+  maxStakePercent: number;
 }
 
 export interface PoissonMatrix {
@@ -79,11 +70,11 @@ export interface BetRecommendation {
   selection: string;
   modelProbability: number;
   bookmakerProbability: number;
-  value: number; // value percentage
+  value: number;
   odds: number;
   kellyStake: number;
   confidence: 'high' | 'medium' | 'low';
-  stability: number; // 0-1 from Monte Carlo
+  stability: number;
   risk: 'low' | 'medium' | 'high';
 }
 
@@ -114,4 +105,11 @@ export interface MonteCarloResult {
   avgAwayGoals: number;
   avgCorners: number;
   scoreDistribution: Record<string, number>;
+}
+
+export interface DailyMatch {
+  id: string;
+  match: MatchData;
+  result: AnalysisResult;
+  addedAt: Date;
 }

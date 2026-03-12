@@ -9,38 +9,43 @@ function formFactor(form: ('W' | 'D' | 'L')[]): number {
   const pts = formPoints(form);
   const max = form.length * 3;
   const ratio = pts / max;
-  // Good form (>60%) → +5%, bad form (<30%) → -5%
   if (ratio > 0.6) return 1.05;
   if (ratio < 0.3) return 0.95;
   return 1.0;
 }
 
 // ===== OFFENSIVE/DEFENSIVE STRENGTH =====
-function offensiveStrength(team: TeamStats, leagueAvg: number, isHome: boolean): number {
+// Now uses team's own avg as baseline instead of league avg
+function offensiveStrength(team: TeamStats, isHome: boolean): number {
   const goals = isHome ? team.goalsScoredHome : team.goalsScoredAway;
-  const matches = team.matchesPlayed / 2; // approx home/away split
+  const matches = team.matchesPlayed / 2;
   if (matches === 0) return 1;
-  return (goals / matches) / (leagueAvg / 2);
+  const avgPerMatch = team.goalsScored / team.matchesPlayed;
+  if (avgPerMatch === 0) return 1;
+  return (goals / matches) / avgPerMatch;
 }
 
-function defensiveStrength(team: TeamStats, leagueAvg: number, isHome: boolean): number {
+function defensiveStrength(team: TeamStats, isHome: boolean): number {
   const goals = isHome ? team.goalsConcededHome : team.goalsConcededAway;
   const matches = team.matchesPlayed / 2;
   if (matches === 0) return 1;
-  return (goals / matches) / (leagueAvg / 2);
+  const avgPerMatch = team.goalsConceded / team.matchesPlayed;
+  if (avgPerMatch === 0) return 1;
+  return (goals / matches) / avgPerMatch;
 }
 
 // ===== EXPECTED GOALS =====
 function calculateXG(match: MatchData): { homeXG: number; awayXG: number } {
-  const avgGoals = match.leagueAvgGoals / 2; // per team
+  const homeAvgScored = match.homeTeam.matchesPlayed > 0 ? match.homeTeam.goalsScored / match.homeTeam.matchesPlayed : 1.3;
+  const awayAvgScored = match.awayTeam.matchesPlayed > 0 ? match.awayTeam.goalsScored / match.awayTeam.matchesPlayed : 1.1;
 
-  let homeAttack = offensiveStrength(match.homeTeam, match.leagueAvgGoals, true);
-  let awayDefense = defensiveStrength(match.awayTeam, match.leagueAvgGoals, false);
-  let awayAttack = offensiveStrength(match.awayTeam, match.leagueAvgGoals, false);
-  let homeDefense = defensiveStrength(match.homeTeam, match.leagueAvgGoals, true);
+  let homeAttack = offensiveStrength(match.homeTeam, true);
+  let awayDefense = defensiveStrength(match.awayTeam, false);
+  let awayAttack = offensiveStrength(match.awayTeam, false);
+  let homeDefense = defensiveStrength(match.homeTeam, true);
 
-  let homeXG = avgGoals * homeAttack * awayDefense;
-  let awayXG = avgGoals * awayAttack * homeDefense;
+  let homeXG = homeAvgScored * homeAttack * awayDefense;
+  let awayXG = awayAvgScored * awayAttack * homeDefense;
 
   // Home advantage +12%
   homeXG *= 1.12;
@@ -53,7 +58,6 @@ function calculateXG(match: MatchData): { homeXG: number; awayXG: number } {
   // xG vs actual goals adjustment
   const homeXGRatio = match.homeTeam.xG > 0 ? match.homeTeam.goalsScored / match.homeTeam.xG : 1;
   const awayXGRatio = match.awayTeam.xG > 0 ? match.awayTeam.goalsScored / match.awayTeam.xG : 1;
-  // Regress toward 1
   homeXG *= 0.7 + 0.3 * homeXGRatio;
   awayXG *= 0.7 + 0.3 * awayXGRatio;
 
@@ -61,7 +65,7 @@ function calculateXG(match: MatchData): { homeXG: number; awayXG: number } {
   if (match.homeTeam.matchesPlayed > 0 && match.awayTeam.matchesPlayed > 0) {
     const homeSoTPerMatch = match.homeTeam.shotsOnTarget / match.homeTeam.matchesPlayed;
     const awaySoTPerMatch = match.awayTeam.shotsOnTarget / match.awayTeam.matchesPlayed;
-    homeXG *= 0.9 + 0.1 * (homeSoTPerMatch / 5); // normalize around 5 SoT
+    homeXG *= 0.9 + 0.1 * (homeSoTPerMatch / 5);
     awayXG *= 0.9 + 0.1 * (awaySoTPerMatch / 5);
   }
 
@@ -134,11 +138,6 @@ function oddsToProb(odds: number): number {
   return 1 / odds;
 }
 
-function removeMargin(probs: number[]): number[] {
-  const total = probs.reduce((s, p) => s + p, 0);
-  return probs.map(p => p / total);
-}
-
 // ===== MONTE CARLO =====
 function monteCarloSimulation(homeXG: number, awayXG: number, homeCorners: number, awayCorners: number, simulations = 10000): MonteCarloResult {
   let homeWins = 0, draws = 0, awayWins = 0, over25 = 0, bttsCount = 0;
@@ -204,12 +203,14 @@ function kellyStake(prob: number, odds: number): number {
 
 // ===== CORNERS ANALYSIS =====
 function expectedCorners(match: MatchData): number {
-  let base = (match.homeTeam.cornersPerMatch + match.awayTeam.cornersPerMatch);
-  // Style adjustment
+  // Use home corners of home team + away corners of away team
+  let base = match.homeTeam.cornersPerMatchHome + match.awayTeam.cornersPerMatchAway;
+  // Fallback to general average if home/away not set
+  if (base === 0) base = match.homeTeam.cornersPerMatch + match.awayTeam.cornersPerMatch;
+  
   if (match.homeTeam.playStyle === 'possession' || match.homeTeam.playStyle === 'pressing') base *= 1.05;
-  if (match.awayTeam.playStyle === 'low-block') base *= 1.08; // more corners for attacking team
+  if (match.awayTeam.playStyle === 'low-block') base *= 1.08;
   if (match.awayTeam.playStyle === 'counter') base *= 0.97;
-  // Derby boost
   if (match.isDerby) base *= 1.05;
   return base;
 }
@@ -270,8 +271,9 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
   const probs = calculateResultProbs(matrix);
   const expCorners = expectedCorners(match);
 
-  // Monte Carlo
-  const mc = monteCarloSimulation(homeXG, awayXG, match.homeTeam.cornersPerMatch, match.awayTeam.cornersPerMatch);
+  const homeCornersForMC = match.homeTeam.cornersPerMatchHome || match.homeTeam.cornersPerMatch;
+  const awayCornersForMC = match.awayTeam.cornersPerMatchAway || match.awayTeam.cornersPerMatch;
+  const mc = monteCarloSimulation(homeXG, awayXG, homeCornersForMC, awayCornersForMC);
 
   // Blend Poisson + Monte Carlo (70/30)
   const homeWinProb = probs.homeWin * 0.7 + mc.homeWinPct * 0.3;
@@ -280,7 +282,6 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
   const over25Prob = probs.over25 * 0.7 + mc.over25Pct * 0.3;
   const bttsProb = probs.btts * 0.7 + mc.bttsPct * 0.3;
 
-  // Build recommendations
   const recommendations: BetRecommendation[] = [];
 
   // Winner bets
@@ -352,7 +353,7 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
       { selection: `Under ${match.cornersLine} cornere`, prob: underCornersProb, odds: match.oddsUnderCorners },
     ]) {
       const value = detectValue(bet.prob, bet.odds);
-      const stability = 0.6; // corners are inherently less stable
+      const stability = 0.6;
       const risk = assessRisk(value, stability, bet.odds);
       const kelly = kellyStake(bet.prob, bet.odds);
       const bookProb = oddsToProb(bet.odds);
@@ -385,7 +386,6 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
     });
   }
 
-  // Sort by value * stability
   filtered.sort((a, b) => (b.value * b.stability) - (a.value * a.stability));
 
   return {

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +21,8 @@ function defaultTeam(name: string): TeamStats {
     shots: 0, shotsOnTarget: 0,
     possession: 50, dangerousAttacks: 0,
     corners: 0, cornersPerMatch: 5,
+    cornersPerMatchHome: 5,
+    cornersPerMatchAway: 4,
     cards: 0, cardsPerMatch: 2,
     fouls: 0,
     playStyle: 'possession',
@@ -35,8 +36,6 @@ export function defaultMatch(): MatchData {
     homeTeam: defaultTeam('Echipa Gazdă'),
     awayTeam: defaultTeam('Echipa Oaspete'),
     league: '',
-    leagueAvgGoals: 2.7,
-    leagueAvgCorners: 10,
     oddsHome: 2.0, oddsDraw: 3.3, oddsAway: 3.5,
     oddsOver25: 1.85, oddsUnder25: 2.0,
     oddsBTTSYes: 1.8, oddsBTTSNo: 2.0,
@@ -127,6 +126,17 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
           <Input type="number" step="0.1" value={team.cornersPerMatch} onChange={e => update('cornersPerMatch', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
+          <Label className="text-xs text-muted-foreground">Cornere acasă/meci</Label>
+          <Input type="number" step="0.1" value={team.cornersPerMatchHome} onChange={e => update('cornersPerMatchHome', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Cornere deplasare/meci</Label>
+          <Input type="number" step="0.1" value={team.cornersPerMatchAway} onChange={e => update('cornersPerMatchAway', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
           <Label className="text-xs text-muted-foreground">Cartonașe/meci</Label>
           <Input type="number" step="0.1" value={team.cardsPerMatch} onChange={e => update('cardsPerMatch', +e.target.value)} className="bg-secondary border-border" />
         </div>
@@ -134,13 +144,13 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
           <Label className="text-xs text-muted-foreground">Atacuri periculoase</Label>
           <Input type="number" value={team.dangerousAttacks} onChange={e => update('dangerousAttacks', +e.target.value)} className="bg-secondary border-border" />
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs text-muted-foreground">Loc clasament</Label>
           <Input type="number" value={team.leaguePosition} onChange={e => update('leaguePosition', +e.target.value)} className="bg-secondary border-border" />
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs text-muted-foreground">Stil de joc</Label>
           <Select value={team.playStyle} onValueChange={v => update('playStyle', v)}>
@@ -151,6 +161,10 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
               {STYLES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Echipe în ligă</Label>
+          <Input type="number" value={team.totalTeamsInLeague} onChange={e => update('totalTeamsInLeague', +e.target.value)} className="bg-secondary border-border" />
         </div>
       </div>
 
@@ -186,25 +200,14 @@ export function MatchInputForm({ match, onChange }: Props) {
       {/* League & context */}
       <div className="rounded-lg border border-border bg-card p-4 space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Liga & Context</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-xs text-muted-foreground">Liga</Label>
             <Input value={match.league} onChange={e => onChange({ ...match, league: e.target.value })} className="bg-secondary border-border" />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Media goluri ligă</Label>
-            <Input type="number" step="0.1" value={match.leagueAvgGoals} onChange={e => onChange({ ...match, leagueAvgGoals: +e.target.value })} className="bg-secondary border-border" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Media cornere ligă</Label>
-            <Input type="number" step="0.1" value={match.leagueAvgCorners} onChange={e => onChange({ ...match, leagueAvgCorners: +e.target.value })} className="bg-secondary border-border" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Echipe în ligă</Label>
-            <Input type="number" value={match.homeTeam.totalTeamsInLeague} onChange={e => {
-              const n = +e.target.value;
-              onChange({ ...match, homeTeam: { ...match.homeTeam, totalTeamsInLeague: n }, awayTeam: { ...match.awayTeam, totalTeamsInLeague: n } });
-            }} className="bg-secondary border-border" />
+            <Label className="text-xs text-muted-foreground">Arbitru cartonașe/meci</Label>
+            <Input type="number" step="0.1" value={match.refereeCardsPerMatch ?? ''} onChange={e => onChange({ ...match, refereeCardsPerMatch: +e.target.value })} className="bg-secondary border-border" />
           </div>
         </div>
         <div className="flex flex-wrap gap-6">

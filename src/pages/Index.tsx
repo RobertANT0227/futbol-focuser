@@ -3,8 +3,10 @@ import { Button } from '@/components/ui/button';
 import { MatchInputForm, defaultMatch } from '@/components/MatchInputForm';
 import { PlanForm, defaultPlan } from '@/components/PlanForm';
 import { VerdictDisplay } from '@/components/VerdictDisplay';
+import { DailyTop } from '@/components/DailyTop';
+import { HowItWorks } from '@/components/HowItWorks';
 import { runAnalysis } from '@/lib/engine';
-import type { MatchData, UserPlan, AnalysisResult } from '@/lib/types';
+import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
 const Index = () => {
   const [match, setMatch] = useState<MatchData>(defaultMatch());
@@ -12,10 +14,10 @@ const Index = () => {
   const [planSet, setPlanSet] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [dailyMatches, setDailyMatches] = useState<DailyMatch[]>([]);
 
   const handleAnalyze = () => {
     setAnalyzing(true);
-    // Small delay for UX
     setTimeout(() => {
       const analysis = runAnalysis(match, planSet ? plan : undefined);
       setResult(analysis);
@@ -23,9 +25,22 @@ const Index = () => {
     }, 500);
   };
 
+  const handleAddToDaily = () => {
+    if (!result) return;
+    const dm: DailyMatch = {
+      id: crypto.randomUUID(),
+      match: { ...match },
+      result,
+      addedAt: new Date(),
+    };
+    setDailyMatches(prev => [...prev, dm]);
+    // Reset form for next match
+    setMatch(defaultMatch());
+    setResult(null);
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -35,13 +50,19 @@ const Index = () => {
               <p className="text-xs text-muted-foreground">Motor de analiză pentru pariuri sportive</p>
             </div>
           </div>
-          <div className="text-xs font-mono text-muted-foreground">
-            Poisson + Monte Carlo + Kelly
+          <div className="flex items-center gap-3">
+            <HowItWorks />
+            <div className="text-xs font-mono text-muted-foreground">
+              Poisson + Monte Carlo + Kelly
+            </div>
           </div>
         </div>
       </header>
 
       <main className="container max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Daily Top */}
+        <DailyTop matches={dailyMatches} onClear={() => setDailyMatches([])} />
+
         {/* Plan */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -71,7 +92,7 @@ const Index = () => {
         </div>
 
         {/* Analyze button */}
-        <div className="text-center">
+        <div className="text-center space-y-3">
           <Button
             size="lg"
             onClick={handleAnalyze}
@@ -86,18 +107,34 @@ const Index = () => {
               <span className="flex items-center gap-2">🔬 Analizează meciul</span>
             )}
           </Button>
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-xs text-muted-foreground">
             Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion
           </p>
         </div>
 
         {/* Results */}
         {result && (
-          <VerdictDisplay
-            result={result}
-            homeTeamName={match.homeTeam.name}
-            awayTeamName={match.awayTeam.name}
-          />
+          <>
+            <VerdictDisplay
+              result={result}
+              homeTeamName={match.homeTeam.name}
+              awayTeamName={match.awayTeam.name}
+            />
+            {/* Add to daily top button */}
+            <div className="text-center">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={handleAddToDaily}
+                className="px-8 font-bold border-accent text-accent hover:bg-accent hover:text-accent-foreground gap-2"
+              >
+                🏅 Adaugă în Topul Zilei
+              </Button>
+              <p className="text-xs text-muted-foreground mt-1">
+                Adaugă acest meci în topul zilei și continuă cu alt meci
+              </p>
+            </div>
+          </>
         )}
       </main>
 
