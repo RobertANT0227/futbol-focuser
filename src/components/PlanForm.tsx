@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,9 +7,7 @@ import type { UserPlan } from '@/lib/types';
 export const defaultPlan: UserPlan = {
   maxRisk: 'medium',
   bankroll: 1000,
-  minValue: 3,
   preferredBets: ['corners', 'winner', 'goals'],
-  maxStakePercent: 5,
 };
 
 interface Props {
@@ -30,18 +27,10 @@ export function PlanForm({ plan, onChange }: Props) {
     <div className="rounded-lg border border-border bg-card p-4 space-y-4">
       <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">📋 Plan Personalizat</h3>
       
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Bankroll (€)</Label>
+          <Label className="text-xs text-muted-foreground">Bankroll (LEI)</Label>
           <Input type="number" value={plan.bankroll} onChange={e => onChange({ ...plan, bankroll: +e.target.value })} className="bg-secondary border-border" />
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Value minim (%)</Label>
-          <Input type="number" step="0.5" value={plan.minValue} onChange={e => onChange({ ...plan, minValue: +e.target.value })} className="bg-secondary border-border" />
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Stake max (%)</Label>
-          <Input type="number" step="0.5" value={plan.maxStakePercent} onChange={e => onChange({ ...plan, maxStakePercent: +e.target.value })} className="bg-secondary border-border" />
         </div>
         <div>
           <Label className="text-xs text-muted-foreground">Risc maxim</Label>
@@ -76,6 +65,8 @@ export function PlanForm({ plan, onChange }: Props) {
           ))}
         </div>
       </div>
+
+      <p className="text-xs text-muted-foreground">💡 Kelly Criterion full — robotul calculează automat miza optimă din bankroll.</p>
     </div>
   );
 }

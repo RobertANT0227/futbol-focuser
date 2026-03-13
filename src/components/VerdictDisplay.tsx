@@ -59,7 +59,7 @@ function BetCard({ bet }: { bet: BetRecommendation }) {
         </div>
         <div>
           <span className="text-muted-foreground">Kelly Stake:</span>
-          <span className="ml-1 text-accent">{bet.kellyStake.toFixed(1)}€</span>
+          <span className="ml-1 text-accent">{bet.kellyStake.toFixed(1)} LEI</span>
         </div>
         <div>
           <span className="text-muted-foreground">Risc:</span>
@@ -83,7 +83,6 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
   const winnerBets = result.recommendations.filter(r => r.category === 'winner');
   const goalsBets = result.recommendations.filter(r => r.category === 'goals');
 
-  // Determine best verdict for each
   const bestCorner = cornersBets.length > 0 ? cornersBets[0] : null;
   const bestWinner = winnerBets.length > 0 ? winnerBets[0] : null;
   const bestGoal = goalsBets.length > 0 ? goalsBets[0] : null;
@@ -167,7 +166,6 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
         <h2 className="text-lg font-bold text-primary mb-4">🎯 VERDICT FINAL</h2>
         
         <div className="space-y-4">
-          {/* Corners */}
           <div className="border-l-4 border-bet-corners pl-4">
             <h4 className="text-sm font-semibold text-bet-corners mb-1">⛳ CORNERE</h4>
             {bestCorner ? (
@@ -177,13 +175,13 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
                 <span className={`ml-2 text-xs ${bestCorner.value > 0 ? 'text-primary' : 'text-destructive'}`}>
                   (value: {bestCorner.value > 0 ? '+' : ''}{bestCorner.value.toFixed(1)}%)
                 </span>
+                <span className="ml-2 text-xs text-accent">Kelly: {bestCorner.kellyStake.toFixed(1)} LEI</span>
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">Cornere estimate: {result.expectedCorners.toFixed(1)} — nicio valoare detectată sau linie nedisponibilă</div>
             )}
           </div>
 
-          {/* Winner */}
           <div className="border-l-4 border-bet-winner pl-4">
             <h4 className="text-sm font-semibold text-bet-winner mb-1">🏆 SOLIST</h4>
             {bestWinner ? (
@@ -193,13 +191,13 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
                 <span className={`ml-2 text-xs ${bestWinner.value > 0 ? 'text-primary' : 'text-destructive'}`}>
                   (value: {bestWinner.value > 0 ? '+' : ''}{bestWinner.value.toFixed(1)}%)
                 </span>
+                <span className="ml-2 text-xs text-accent">Kelly: {bestWinner.kellyStake.toFixed(1)} LEI</span>
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">Niciun solist cu value detectat</div>
             )}
           </div>
 
-          {/* Goals */}
           <div className="border-l-4 border-bet-goals pl-4">
             <h4 className="text-sm font-semibold text-bet-goals mb-1">⚽ GOLURI</h4>
             {bestGoal ? (
@@ -209,6 +207,7 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
                 <span className={`ml-2 text-xs ${bestGoal.value > 0 ? 'text-primary' : 'text-destructive'}`}>
                   (value: {bestGoal.value > 0 ? '+' : ''}{bestGoal.value.toFixed(1)}%)
                 </span>
+                <span className="ml-2 text-xs text-accent">Kelly: {bestGoal.kellyStake.toFixed(1)} LEI</span>
               </div>
             ) : (
               <div className="text-xs text-muted-foreground">Nicio valoare detectată pe goluri</div>
