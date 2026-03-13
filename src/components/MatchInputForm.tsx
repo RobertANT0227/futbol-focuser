@@ -10,21 +10,21 @@ const STYLES = ['possession', 'counter', 'pressing', 'low-block'] as const;
 function defaultTeam(name: string): TeamStats {
   return {
     name,
-    goalsScored: 0, goalsConceded: 0,
-    goalsScoredHome: 0, goalsConcededHome: 0,
-    goalsScoredAway: 0, goalsConcededAway: 0,
-    matchesPlayed: 0,
+    goalsScored: 1.3, goalsConceded: 1.1,
+    goalsScoredHome: 1.5, goalsConcededHome: 1.0,
+    goalsScoredAway: 1.1, goalsConcededAway: 1.3,
+    matchesPlayed: 20,
     formLast5: ['W', 'D', 'L', 'W', 'D'],
     formHome: ['W', 'W', 'D', 'W', 'L'],
     formAway: ['D', 'L', 'W', 'D', 'L'],
-    xG: 0, xGA: 0,
-    shots: 0, shotsOnTarget: 0,
-    possession: 50, dangerousAttacks: 0,
+    xG: 1.3, xGA: 1.1,
+    shots: 12, shotsOnTarget: 4,
+    possession: 50, dangerousAttacks: 40,
     corners: 0, cornersPerMatch: 5,
     cornersPerMatchHome: 5,
     cornersPerMatchAway: 4,
     cards: 0, cardsPerMatch: 2,
-    fouls: 0,
+    fouls: 12,
     playStyle: 'possession',
     leaguePosition: 10,
     totalTeamsInLeague: 20,
@@ -42,7 +42,6 @@ export function defaultMatch(): MatchData {
     oddsOverCorners: 1.85, oddsUnderCorners: 2.0,
     cornersLine: 10.5,
     isDerby: false,
-    refereeCardsPerMatch: 4,
     homeTeamFatigued: false, awayTeamFatigued: false,
     homeEuropeanMatch: false, awayEuropeanMatch: false,
   };
@@ -73,46 +72,46 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Goluri marcate</Label>
-          <Input type="number" value={team.goalsScored} onChange={e => update('goalsScored', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie goluri marcate/meci</Label>
+          <Input type="number" step="0.1" value={team.goalsScored} onChange={e => update('goalsScored', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Goluri primite</Label>
-          <Input type="number" value={team.goalsConceded} onChange={e => update('goalsConceded', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie goluri primite/meci</Label>
+          <Input type="number" step="0.1" value={team.goalsConceded} onChange={e => update('goalsConceded', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">xG</Label>
+          <Label className="text-xs text-muted-foreground">Medie xG/meci</Label>
           <Input type="number" step="0.1" value={team.xG} onChange={e => update('xG', +e.target.value)} className="bg-secondary border-border" />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Goluri acasă marcate</Label>
-          <Input type="number" value={team.goalsScoredHome} onChange={e => update('goalsScoredHome', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie goluri acasă marcate/meci</Label>
+          <Input type="number" step="0.1" value={team.goalsScoredHome} onChange={e => update('goalsScoredHome', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Goluri acasă primite</Label>
-          <Input type="number" value={team.goalsConcededHome} onChange={e => update('goalsConcededHome', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie goluri acasă primite/meci</Label>
+          <Input type="number" step="0.1" value={team.goalsConcededHome} onChange={e => update('goalsConcededHome', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Goluri deplasare marcate</Label>
-          <Input type="number" value={team.goalsScoredAway} onChange={e => update('goalsScoredAway', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie goluri deplasare marcate/meci</Label>
+          <Input type="number" step="0.1" value={team.goalsScoredAway} onChange={e => update('goalsScoredAway', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Goluri deplasare primite</Label>
-          <Input type="number" value={team.goalsConcededAway} onChange={e => update('goalsConcededAway', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie goluri deplasare primite/meci</Label>
+          <Input type="number" step="0.1" value={team.goalsConcededAway} onChange={e => update('goalsConcededAway', +e.target.value)} className="bg-secondary border-border" />
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Șuturi</Label>
-          <Input type="number" value={team.shots} onChange={e => update('shots', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie șuturi/meci</Label>
+          <Input type="number" step="0.1" value={team.shots} onChange={e => update('shots', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Șuturi pe poartă</Label>
-          <Input type="number" value={team.shotsOnTarget} onChange={e => update('shotsOnTarget', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie șuturi pe poartă/meci</Label>
+          <Input type="number" step="0.1" value={team.shotsOnTarget} onChange={e => update('shotsOnTarget', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
           <Label className="text-xs text-muted-foreground">Posesie %</Label>
@@ -137,12 +136,12 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Cartonașe/meci</Label>
+          <Label className="text-xs text-muted-foreground">Medie cartonașe/meci</Label>
           <Input type="number" step="0.1" value={team.cardsPerMatch} onChange={e => update('cardsPerMatch', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Atacuri periculoase</Label>
-          <Input type="number" value={team.dangerousAttacks} onChange={e => update('dangerousAttacks', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Medie faulturi/meci</Label>
+          <Input type="number" step="0.1" value={team.fouls} onChange={e => update('fouls', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
           <Label className="text-xs text-muted-foreground">Loc clasament</Label>
@@ -200,15 +199,9 @@ export function MatchInputForm({ match, onChange }: Props) {
       {/* League & context */}
       <div className="rounded-lg border border-border bg-card p-4 space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Liga & Context</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs text-muted-foreground">Liga</Label>
-            <Input value={match.league} onChange={e => onChange({ ...match, league: e.target.value })} className="bg-secondary border-border" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Arbitru cartonașe/meci</Label>
-            <Input type="number" step="0.1" value={match.refereeCardsPerMatch ?? ''} onChange={e => onChange({ ...match, refereeCardsPerMatch: +e.target.value })} className="bg-secondary border-border" />
-          </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Liga</Label>
+          <Input value={match.league} onChange={e => onChange({ ...match, league: e.target.value })} className="bg-secondary border-border" />
         </div>
         <div className="flex flex-wrap gap-6">
           <div className="flex items-center gap-2">

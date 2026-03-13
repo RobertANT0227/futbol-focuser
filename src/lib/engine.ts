@@ -1,4 +1,4 @@
-import type { MatchData, TeamStats, UserPlan, PoissonMatrix, BetRecommendation, AnalysisResult, MonteCarloResult } from './types';
+import type { MatchData, TeamStats, UserPlan, PoissonMatrix, BetRecommendation, AnalysisResult, MonteCarloResult, AnalysisStep } from './types';
 
 // ===== FORM CALCULATION =====
 function formPoints(form: ('W' | 'D' | 'L')[]): number {
@@ -15,34 +15,30 @@ function formFactor(form: ('W' | 'D' | 'L')[]): number {
 }
 
 // ===== OFFENSIVE/DEFENSIVE STRENGTH =====
-// Now uses team's own avg as baseline instead of league avg
+// All stats are per-match averages now
 function offensiveStrength(team: TeamStats, isHome: boolean): number {
-  const goals = isHome ? team.goalsScoredHome : team.goalsScoredAway;
-  const matches = team.matchesPlayed / 2;
-  if (matches === 0) return 1;
-  const avgPerMatch = team.goalsScored / team.matchesPlayed;
+  const goalsPerMatch = isHome ? team.goalsScoredHome : team.goalsScoredAway;
+  const avgPerMatch = team.goalsScored;
   if (avgPerMatch === 0) return 1;
-  return (goals / matches) / avgPerMatch;
+  return goalsPerMatch / avgPerMatch;
 }
 
 function defensiveStrength(team: TeamStats, isHome: boolean): number {
-  const goals = isHome ? team.goalsConcededHome : team.goalsConcededAway;
-  const matches = team.matchesPlayed / 2;
-  if (matches === 0) return 1;
-  const avgPerMatch = team.goalsConceded / team.matchesPlayed;
+  const goalsPerMatch = isHome ? team.goalsConcededHome : team.goalsConcededAway;
+  const avgPerMatch = team.goalsConceded;
   if (avgPerMatch === 0) return 1;
-  return (goals / matches) / avgPerMatch;
+  return goalsPerMatch / avgPerMatch;
 }
 
 // ===== EXPECTED GOALS =====
 function calculateXG(match: MatchData): { homeXG: number; awayXG: number } {
-  const homeAvgScored = match.homeTeam.matchesPlayed > 0 ? match.homeTeam.goalsScored / match.homeTeam.matchesPlayed : 1.3;
-  const awayAvgScored = match.awayTeam.matchesPlayed > 0 ? match.awayTeam.goalsScored / match.awayTeam.matchesPlayed : 1.1;
+  const homeAvgScored = match.homeTeam.goalsScored > 0 ? match.homeTeam.goalsScored : 1.3;
+  const awayAvgScored = match.awayTeam.goalsScored > 0 ? match.awayTeam.goalsScored : 1.1;
 
-  let homeAttack = offensiveStrength(match.homeTeam, true);
-  let awayDefense = defensiveStrength(match.awayTeam, false);
-  let awayAttack = offensiveStrength(match.awayTeam, false);
-  let homeDefense = defensiveStrength(match.homeTeam, true);
+  const homeAttack = offensiveStrength(match.homeTeam, true);
+  const awayDefense = defensiveStrength(match.awayTeam, false);
+  const awayAttack = offensiveStrength(match.awayTeam, false);
+  const homeDefense = defensiveStrength(match.homeTeam, true);
 
   let homeXG = homeAvgScored * homeAttack * awayDefense;
   let awayXG = awayAvgScored * awayAttack * homeDefense;
@@ -61,12 +57,10 @@ function calculateXG(match: MatchData): { homeXG: number; awayXG: number } {
   homeXG *= 0.7 + 0.3 * homeXGRatio;
   awayXG *= 0.7 + 0.3 * awayXGRatio;
 
-  // Shots on target adjustment
-  if (match.homeTeam.matchesPlayed > 0 && match.awayTeam.matchesPlayed > 0) {
-    const homeSoTPerMatch = match.homeTeam.shotsOnTarget / match.homeTeam.matchesPlayed;
-    const awaySoTPerMatch = match.awayTeam.shotsOnTarget / match.awayTeam.matchesPlayed;
-    homeXG *= 0.9 + 0.1 * (homeSoTPerMatch / 5);
-    awayXG *= 0.9 + 0.1 * (awaySoTPerMatch / 5);
+  // Shots on target adjustment (already per match)
+  if (match.homeTeam.shotsOnTarget > 0 && match.awayTeam.shotsOnTarget > 0) {
+    homeXG *= 0.9 + 0.1 * (match.homeTeam.shotsOnTarget / 5);
+    awayXG *= 0.9 + 0.1 * (match.awayTeam.shotsOnTarget / 5);
   }
 
   // Fatigue adjustment
@@ -193,7 +187,7 @@ function poissonRandom(lambda: number): number {
   return k - 1;
 }
 
-// ===== KELLY CRITERION =====
+// ===== KELLY CRITERION (FULL) =====
 function kellyStake(prob: number, odds: number): number {
   const b = odds - 1;
   const q = 1 - prob;
@@ -203,9 +197,7 @@ function kellyStake(prob: number, odds: number): number {
 
 // ===== CORNERS ANALYSIS =====
 function expectedCorners(match: MatchData): number {
-  // Use home corners of home team + away corners of away team
   let base = match.homeTeam.cornersPerMatchHome + match.awayTeam.cornersPerMatchAway;
-  // Fallback to general average if home/away not set
   if (base === 0) base = match.homeTeam.cornersPerMatch + match.awayTeam.cornersPerMatch;
   
   if (match.homeTeam.playStyle === 'possession' || match.homeTeam.playStyle === 'pressing') base *= 1.05;
@@ -264,6 +256,142 @@ function assessRisk(value: number, stability: number, odds: number): 'low' | 'me
   return 'low';
 }
 
+// ===== BUILD ANALYSIS STEPS =====
+function buildAnalysisSteps(match: MatchData, homeXG: number, awayXG: number, probs: any, mc: MonteCarloResult, expCorners: number): AnalysisStep[] {
+  const steps: AnalysisStep[] = [];
+  const h = match.homeTeam;
+  const a = match.awayTeam;
+
+  steps.push({
+    title: '1. Date de intrare',
+    description: `${h.name} (acasă) vs ${a.name} (deplasare). Medie goluri: ${h.goalsScored}/meci vs ${a.goalsScored}/meci. xG: ${h.xG} vs ${a.xG}.`,
+    data: {
+      'Goluri gazdă/meci': h.goalsScored,
+      'Goluri oaspete/meci': a.goalsScored,
+      'xG gazdă': h.xG,
+      'xG oaspete': a.xG,
+      'Posesie gazdă': `${h.possession}%`,
+      'Posesie oaspete': `${a.possession}%`,
+    }
+  });
+
+  const homeAtt = offensiveStrength(h, true);
+  const awayDef = defensiveStrength(a, false);
+  const awayAtt = offensiveStrength(a, false);
+  const homeDef = defensiveStrength(h, true);
+
+  steps.push({
+    title: '2. Forță ofensivă/defensivă',
+    description: `Atac gazdă (acasă): ${homeAtt.toFixed(3)}. Apărare oaspete (deplasare): ${awayDef.toFixed(3)}. Atac oaspete (deplasare): ${awayAtt.toFixed(3)}. Apărare gazdă (acasă): ${homeDef.toFixed(3)}.`,
+    data: {
+      'Atac gazdă': homeAtt.toFixed(3),
+      'Apărare oaspete': awayDef.toFixed(3),
+      'Atac oaspete': awayAtt.toFixed(3),
+      'Apărare gazdă': homeDef.toFixed(3),
+    }
+  });
+
+  const homeFF = formFactor(h.formLast5);
+  const awayFF = formFactor(a.formLast5);
+
+  steps.push({
+    title: '3. Ajustări aplicate',
+    description: `Avantaj teren: +12% gazdă. Formă gazdă: ×${homeFF}. Formă oaspete: ×${awayFF}. Stil gazdă (${h.playStyle}): ×${styleAttackModifier(h.playStyle)}. Stil oaspete (${a.playStyle}): ×${styleAttackModifier(a.playStyle)}.`,
+    data: {
+      'Factor formă gazdă': homeFF,
+      'Factor formă oaspete': awayFF,
+      'Stil gazdă': `${h.playStyle} (×${styleAttackModifier(h.playStyle)})`,
+      'Stil oaspete': `${a.playStyle} (×${styleAttackModifier(a.playStyle)})`,
+    }
+  });
+
+  steps.push({
+    title: '4. Expected Goals calculate',
+    description: `După toate ajustările, xG final: Gazdă = ${homeXG.toFixed(3)}, Oaspete = ${awayXG.toFixed(3)}.`,
+    data: {
+      'xG final gazdă': homeXG.toFixed(3),
+      'xG final oaspete': awayXG.toFixed(3),
+    }
+  });
+
+  steps.push({
+    title: '5. Distribuția Poisson',
+    description: `Matricea Poisson 6×6 calculată. P(k) = (λ^k × e^(-λ)) / k!. Rezultat: 1=${(probs.homeWin * 100).toFixed(1)}%, X=${(probs.draw * 100).toFixed(1)}%, 2=${(probs.awayWin * 100).toFixed(1)}%.`,
+    data: {
+      'P(1) Poisson': `${(probs.homeWin * 100).toFixed(1)}%`,
+      'P(X) Poisson': `${(probs.draw * 100).toFixed(1)}%`,
+      'P(2) Poisson': `${(probs.awayWin * 100).toFixed(1)}%`,
+      'Over 2.5 Poisson': `${(probs.over25 * 100).toFixed(1)}%`,
+      'BTTS Poisson': `${(probs.btts * 100).toFixed(1)}%`,
+    }
+  });
+
+  steps.push({
+    title: '6. Monte Carlo (10.000 simulări)',
+    description: `Rezultate MC: 1=${(mc.homeWinPct * 100).toFixed(1)}%, X=${(mc.drawPct * 100).toFixed(1)}%, 2=${(mc.awayWinPct * 100).toFixed(1)}%. Medie goluri: ${mc.avgHomeGoals.toFixed(2)}-${mc.avgAwayGoals.toFixed(2)}.`,
+    data: {
+      'P(1) MC': `${(mc.homeWinPct * 100).toFixed(1)}%`,
+      'P(X) MC': `${(mc.drawPct * 100).toFixed(1)}%`,
+      'P(2) MC': `${(mc.awayWinPct * 100).toFixed(1)}%`,
+      'Media goluri gazdă': mc.avgHomeGoals.toFixed(2),
+      'Media goluri oaspete': mc.avgAwayGoals.toFixed(2),
+      'Media cornere': mc.avgCorners.toFixed(1),
+    }
+  });
+
+  const finalHome = probs.homeWin * 0.7 + mc.homeWinPct * 0.3;
+  const finalDraw = probs.draw * 0.7 + mc.drawPct * 0.3;
+  const finalAway = probs.awayWin * 0.7 + mc.awayWinPct * 0.3;
+
+  steps.push({
+    title: '7. Blend final (70% Poisson + 30% MC)',
+    description: `Probabilități finale: 1=${(finalHome * 100).toFixed(1)}%, X=${(finalDraw * 100).toFixed(1)}%, 2=${(finalAway * 100).toFixed(1)}%.`,
+    data: {
+      'P(1) Final': `${(finalHome * 100).toFixed(1)}%`,
+      'P(X) Final': `${(finalDraw * 100).toFixed(1)}%`,
+      'P(2) Final': `${(finalAway * 100).toFixed(1)}%`,
+    }
+  });
+
+  steps.push({
+    title: '8. Cornere estimate',
+    description: `Cornere așteptate: ${expCorners.toFixed(1)} (${h.cornersPerMatchHome} gazdă acasă + ${a.cornersPerMatchAway} oaspete deplasare, ajustat pentru stil și derby).`,
+    data: {
+      'Cornere estimate': expCorners.toFixed(1),
+    }
+  });
+
+  const valueHome = detectValue(finalHome, match.oddsHome);
+  const valueDraw = detectValue(finalDraw, match.oddsDraw);
+  const valueAway = detectValue(finalAway, match.oddsAway);
+
+  steps.push({
+    title: '9. Detecție Value',
+    description: `Value = ((Prob_model - Prob_bookmaker) / Prob_bookmaker) × 100. Gazdă: ${valueHome > 0 ? '+' : ''}${valueHome.toFixed(1)}%. Egal: ${valueDraw > 0 ? '+' : ''}${valueDraw.toFixed(1)}%. Oaspete: ${valueAway > 0 ? '+' : ''}${valueAway.toFixed(1)}%.`,
+    data: {
+      'Value gazdă': `${valueHome > 0 ? '+' : ''}${valueHome.toFixed(1)}%`,
+      'Value egal': `${valueDraw > 0 ? '+' : ''}${valueDraw.toFixed(1)}%`,
+      'Value oaspete': `${valueAway > 0 ? '+' : ''}${valueAway.toFixed(1)}%`,
+    }
+  });
+
+  const kellyHome = kellyStake(finalHome, match.oddsHome);
+  const kellyDraw = kellyStake(finalDraw, match.oddsDraw);
+  const kellyAway = kellyStake(finalAway, match.oddsAway);
+
+  steps.push({
+    title: '10. Kelly Criterion (Full)',
+    description: `f = (b×p - q) / b. Kelly gazdă: ${(kellyHome * 100).toFixed(2)}% din bankroll. Kelly egal: ${(kellyDraw * 100).toFixed(2)}%. Kelly oaspete: ${(kellyAway * 100).toFixed(2)}%.`,
+    data: {
+      'Kelly gazdă': `${(kellyHome * 100).toFixed(2)}%`,
+      'Kelly egal': `${(kellyDraw * 100).toFixed(2)}%`,
+      'Kelly oaspete': `${(kellyAway * 100).toFixed(2)}%`,
+    }
+  });
+
+  return steps;
+}
+
 // ===== MAIN ANALYSIS =====
 export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
   const { homeXG, awayXG } = calculateXG(match);
@@ -281,6 +409,9 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
   const awayWinProb = probs.awayWin * 0.7 + mc.awayWinPct * 0.3;
   const over25Prob = probs.over25 * 0.7 + mc.over25Pct * 0.3;
   const bttsProb = probs.btts * 0.7 + mc.bttsPct * 0.3;
+
+  // Build analysis steps for live view
+  const analysisSteps = buildAnalysisSteps(match, homeXG, awayXG, probs, mc, expCorners);
 
   const recommendations: BetRecommendation[] = [];
 
@@ -306,7 +437,7 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
       bookmakerProbability: bookProb,
       value,
       odds: bet.odds,
-      kellyStake: plan ? Math.min(kelly * plan.bankroll, plan.bankroll * (plan.maxStakePercent / 100)) : kelly * 100,
+      kellyStake: plan ? kelly * plan.bankroll : kelly * 100,
       confidence: value > 10 ? 'high' : value > 5 ? 'medium' : 'low',
       stability,
       risk,
@@ -336,7 +467,7 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
       bookmakerProbability: bookProb,
       value,
       odds: bet.odds,
-      kellyStake: plan ? Math.min(kelly * plan.bankroll, plan.bankroll * (plan.maxStakePercent / 100)) : kelly * 100,
+      kellyStake: plan ? kelly * plan.bankroll : kelly * 100,
       confidence: value > 10 ? 'high' : value > 5 ? 'medium' : 'low',
       stability,
       risk,
@@ -366,7 +497,7 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
         bookmakerProbability: bookProb,
         value,
         odds: bet.odds,
-        kellyStake: plan ? Math.min(kelly * plan.bankroll, plan.bankroll * (plan.maxStakePercent / 100)) : kelly * 100,
+        kellyStake: plan ? kelly * plan.bankroll : kelly * 100,
         confidence: value > 10 ? 'high' : value > 5 ? 'medium' : 'low',
         stability,
         risk,
@@ -380,7 +511,6 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
     filtered = filtered.filter(r => {
       if (plan.maxRisk === 'low' && r.risk === 'high') return false;
       if (plan.maxRisk === 'medium' && r.risk === 'high') return false;
-      if (r.value < plan.minValue) return false;
       if (!plan.preferredBets.includes(r.category)) return false;
       return true;
     });
@@ -403,6 +533,7 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
     monteCarloResults: mc,
     styleAnalysis: analyzeStyle(match),
     motivationAnalysis: analyzeMotivation(match),
+    analysisSteps,
   };
 }
 

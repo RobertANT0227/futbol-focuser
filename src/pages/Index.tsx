@@ -5,7 +5,6 @@ import { PlanForm, defaultPlan } from '@/components/PlanForm';
 import { VerdictDisplay } from '@/components/VerdictDisplay';
 import { DailyTop } from '@/components/DailyTop';
 import { HowItWorks } from '@/components/HowItWorks';
-import { FileUpload } from '@/components/FileUpload';
 import { runAnalysis } from '@/lib/engine';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
@@ -35,7 +34,6 @@ const Index = () => {
       addedAt: new Date(),
     };
     setDailyMatches(prev => [...prev, dm]);
-    // Reset form for next match
     setMatch(defaultMatch());
     setResult(null);
   };
@@ -52,7 +50,7 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <HowItWorks />
+            <HowItWorks steps={result?.analysisSteps} />
             <div className="text-xs font-mono text-muted-foreground">
               Poisson + Monte Carlo + Kelly
             </div>
@@ -81,17 +79,14 @@ const Index = () => {
           {planSet && <PlanForm plan={plan} onChange={setPlan} />}
           {!planSet && (
             <div className="rounded-lg border border-border bg-card/50 p-4 text-center">
-              <p className="text-sm text-muted-foreground">💡 Activează planul personalizat pentru filtrarea automată a pariurilor după risc, value și preferințe.</p>
+              <p className="text-sm text-muted-foreground">💡 Activează planul personalizat pentru filtrarea automată a pariurilor după risc și preferințe. Kelly Criterion full automat.</p>
             </div>
           )}
         </div>
 
         {/* Match Data */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 2: Date meci</h2>
-            <FileUpload match={match} onChange={setMatch} />
-          </div>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pasul 2: Date meci (medii/meci)</h2>
           <MatchInputForm match={match} onChange={setMatch} />
         </div>
 
@@ -112,7 +107,7 @@ const Index = () => {
             )}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion
+            Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion Full
           </p>
         </div>
 
@@ -124,7 +119,6 @@ const Index = () => {
               homeTeamName={match.homeTeam.name}
               awayTeamName={match.awayTeam.name}
             />
-            {/* Add to daily top button */}
             <div className="text-center">
               <Button
                 size="lg"

@@ -1,28 +1,29 @@
 export interface TeamStats {
   name: string;
-  goalsScored: number;
-  goalsConceded: number;
-  goalsScoredHome: number;
-  goalsConcededHome: number;
-  goalsScoredAway: number;
-  goalsConcededAway: number;
+  // All stats are PER MATCH averages
+  goalsScored: number;       // medie goluri marcate/meci
+  goalsConceded: number;     // medie goluri primite/meci
+  goalsScoredHome: number;   // medie goluri marcate acasă/meci
+  goalsConcededHome: number; // medie goluri primite acasă/meci
+  goalsScoredAway: number;   // medie goluri marcate deplasare/meci
+  goalsConcededAway: number; // medie goluri primite deplasare/meci
   matchesPlayed: number;
   formLast5: ('W' | 'D' | 'L')[];
   formHome: ('W' | 'D' | 'L')[];
   formAway: ('W' | 'D' | 'L')[];
-  xG: number;
-  xGA: number;
-  shots: number;
-  shotsOnTarget: number;
+  xG: number;               // medie xG/meci
+  xGA: number;               // medie xGA/meci
+  shots: number;             // medie șuturi/meci
+  shotsOnTarget: number;     // medie șuturi pe poartă/meci
   possession: number;
-  dangerousAttacks: number;
+  dangerousAttacks: number;  // medie atacuri periculoase/meci
   corners: number;
   cornersPerMatch: number;
   cornersPerMatchHome: number;
   cornersPerMatchAway: number;
   cards: number;
   cardsPerMatch: number;
-  fouls: number;
+  fouls: number;             // medie faulturi/meci
   playStyle: 'possession' | 'counter' | 'pressing' | 'low-block';
   leaguePosition: number;
   totalTeamsInLeague: number;
@@ -43,7 +44,6 @@ export interface MatchData {
   oddsUnderCorners?: number;
   cornersLine?: number;
   isDerby: boolean;
-  refereeCardsPerMatch?: number;
   homeTeamFatigued: boolean;
   awayTeamFatigued: boolean;
   homeEuropeanMatch: boolean;
@@ -53,9 +53,7 @@ export interface MatchData {
 export interface UserPlan {
   maxRisk: 'low' | 'medium' | 'high';
   bankroll: number;
-  minValue: number;
   preferredBets: ('corners' | 'winner' | 'goals')[];
-  maxStakePercent: number;
 }
 
 export interface PoissonMatrix {
@@ -93,6 +91,13 @@ export interface AnalysisResult {
   monteCarloResults: MonteCarloResult;
   styleAnalysis: string;
   motivationAnalysis: string;
+  analysisSteps: AnalysisStep[];
+}
+
+export interface AnalysisStep {
+  title: string;
+  description: string;
+  data?: Record<string, string | number>;
 }
 
 export interface MonteCarloResult {
