@@ -5,6 +5,7 @@ import { PlanForm, defaultPlan } from '@/components/PlanForm';
 import { VerdictDisplay } from '@/components/VerdictDisplay';
 import { DailyTop } from '@/components/DailyTop';
 import { HowItWorks } from '@/components/HowItWorks';
+import { FileUpload } from '@/components/FileUpload';
 import { runAnalysis } from '@/lib/engine';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
@@ -87,7 +88,10 @@ const Index = () => {
 
         {/* Match Data */}
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pasul 2: Date meci</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 2: Date meci</h2>
+            <FileUpload match={match} onChange={setMatch} />
+          </div>
           <MatchInputForm match={match} onChange={setMatch} />
         </div>
 
