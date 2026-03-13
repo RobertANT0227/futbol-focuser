@@ -7,59 +7,66 @@ interface Props {
   onChange: (match: MatchData) => void;
 }
 
+function cleanNumber(s: string): number {
+  return parseFloat(s.replace('%', '').replace(',', '.').trim());
+}
+
+const STAT_MAP: Record<string, (h: number, a: number, m: MatchData) => void> = {
+  'goluri așteptate': (h, a, m) => { m.homeTeam.xG = h; m.awayTeam.xG = a; },
+  'xg': (h, a, m) => { m.homeTeam.xG = h; m.awayTeam.xG = a; },
+  'expected goals': (h, a, m) => { m.homeTeam.xG = h; m.awayTeam.xG = a; },
+  'goluri': (h, a, m) => { m.homeTeam.goalsScored = h; m.awayTeam.goalsScored = a; },
+  'goals': (h, a, m) => { m.homeTeam.goalsScored = h; m.awayTeam.goalsScored = a; },
+  'posesie': (h, a, m) => { m.homeTeam.possession = h; m.awayTeam.possession = a; },
+  'possession': (h, a, m) => { m.homeTeam.possession = h; m.awayTeam.possession = a; },
+  'șuturi pe poartă': (h, a, m) => { m.homeTeam.shotsOnTarget = h; m.awayTeam.shotsOnTarget = a; },
+  'suturi pe poarta': (h, a, m) => { m.homeTeam.shotsOnTarget = h; m.awayTeam.shotsOnTarget = a; },
+  'shots on target': (h, a, m) => { m.homeTeam.shotsOnTarget = h; m.awayTeam.shotsOnTarget = a; },
+  'total șuturi': (h, a, m) => { m.homeTeam.shots = h; m.awayTeam.shots = a; },
+  'total suturi': (h, a, m) => { m.homeTeam.shots = h; m.awayTeam.shots = a; },
+  'total shots': (h, a, m) => { m.homeTeam.shots = h; m.awayTeam.shots = a; },
+  'cornere': (h, a, m) => { m.homeTeam.cornersPerMatch = h; m.awayTeam.cornersPerMatch = a; },
+  'corners': (h, a, m) => { m.homeTeam.cornersPerMatch = h; m.awayTeam.cornersPerMatch = a; },
+  'cartonașe galbene': (h, a, m) => { m.homeTeam.cardsPerMatch = h; m.awayTeam.cardsPerMatch = a; },
+  'cartonase galbene': (h, a, m) => { m.homeTeam.cardsPerMatch = h; m.awayTeam.cardsPerMatch = a; },
+  'yellow cards': (h, a, m) => { m.homeTeam.cardsPerMatch = h; m.awayTeam.cardsPerMatch = a; },
+  'faulturi': (h, a, m) => { m.homeTeam.fouls = h; m.awayTeam.fouls = a; },
+  'fouls': (h, a, m) => { m.homeTeam.fouls = h; m.awayTeam.fouls = a; },
+  'ocazii mari create': (h, a, m) => { m.homeTeam.dangerousAttacks = h; m.awayTeam.dangerousAttacks = a; },
+  'big chances': (h, a, m) => { m.homeTeam.dangerousAttacks = h; m.awayTeam.dangerousAttacks = a; },
+};
+
 function parseStatFile(text: string, match: MatchData): MatchData {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   if (lines.length < 4) return match;
 
-  const homeName = lines[0];
-  const awayName = lines[1];
+  const updated: MatchData = JSON.parse(JSON.stringify(match));
+  updated.homeTeam.name = lines[0];
+  updated.awayTeam.name = lines[1];
 
-  const updated = { ...match, homeTeam: { ...match.homeTeam, name: homeName }, awayTeam: { ...match.awayTeam, name: awayName } };
+  // Scan for triplets: number, label, number
+  for (let i = 2; i + 2 < lines.length; i++) {
+    const homeVal = cleanNumber(lines[i]);
+    const label = lines[i + 1].toLowerCase().trim();
+    const awayVal = cleanNumber(lines[i + 2]);
 
-  // Parse triplets: homeValue, label, awayValue
-  let i = 2;
-  while (i + 2 < lines.length) {
-    const homeVal = parseFloat(lines[i]);
-    const label = lines[i + 1].toLowerCase();
-    const awayVal = parseFloat(lines[i + 2]);
+    if (isNaN(homeVal) || isNaN(awayVal)) continue;
 
-    if (isNaN(homeVal) || isNaN(awayVal)) {
-      i++;
-      continue;
+    // Check exact matches first, then partial
+    let matched = false;
+    for (const [key, fn] of Object.entries(STAT_MAP)) {
+      if (label === key || label.includes(key)) {
+        // For "goluri", skip if label also contains xG keywords
+        if (key === 'goluri' && (label.includes('xg') || label.includes('așteptate'))) continue;
+        fn(homeVal, awayVal, updated);
+        matched = true;
+        i += 2; // skip the consumed lines
+        break;
+      }
     }
-
-    if (label.includes('goluri') && !label.includes('xg') && !label.includes('așteptate')) {
-      updated.homeTeam.goalsScored = homeVal;
-      updated.awayTeam.goalsScored = awayVal;
-    } else if (label.includes('xg') || label.includes('așteptate')) {
-      updated.homeTeam.xG = homeVal;
-      updated.awayTeam.xG = awayVal;
-    } else if (label.includes('posesie')) {
-      updated.homeTeam.possession = homeVal;
-      updated.awayTeam.possession = awayVal;
-    } else if (label.includes('șuturi pe poartă') || label.includes('suturi pe poarta')) {
-      updated.homeTeam.shotsOnTarget = homeVal;
-      updated.awayTeam.shotsOnTarget = awayVal;
-    } else if (label.includes('total șuturi') || label.includes('total suturi') || (label.includes('șuturi') && !label.includes('poartă'))) {
-      updated.homeTeam.shots = homeVal;
-      updated.awayTeam.shots = awayVal;
-    } else if (label.includes('cornere')) {
-      updated.homeTeam.cornersPerMatch = homeVal;
-      updated.awayTeam.cornersPerMatch = awayVal;
-    } else if (label.includes('cartonașe') || label.includes('cartonase') || label.includes('galbene')) {
-      updated.homeTeam.cardsPerMatch = homeVal;
-      updated.awayTeam.cardsPerMatch = awayVal;
-    } else if (label.includes('faulturi') || label.includes('fauluri')) {
-      updated.homeTeam.fouls = homeVal;
-      updated.awayTeam.fouls = awayVal;
-    } else if (label.includes('ocazii') || label.includes('dangerous') || label.includes('mari create')) {
-      updated.homeTeam.dangerousAttacks = homeVal;
-      updated.awayTeam.dangerousAttacks = awayVal;
-    }
-
-    i += 3;
   }
 
+  console.log('Parsed file result:', updated.homeTeam.name, updated.homeTeam.goalsScored, updated.homeTeam.shots);
   return updated;
 }
 
