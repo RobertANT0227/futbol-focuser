@@ -94,7 +94,6 @@ const Index = () => {
           </div>
           <MatchInputForm match={match} onChange={setMatch} />
         </div>
-        </div>
 
         {/* Analyze button */}
         <div className="text-center space-y-3">
