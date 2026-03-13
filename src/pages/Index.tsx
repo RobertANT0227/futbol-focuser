@@ -88,8 +88,12 @@ const Index = () => {
 
         {/* Match Data */}
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pasul 2: Date meci</h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 2: Date meci</h2>
+            <FileUpload match={match} onChange={setMatch} />
+          </div>
           <MatchInputForm match={match} onChange={setMatch} />
+        </div>
         </div>
 
         {/* Analyze button */}
