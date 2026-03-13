@@ -5,6 +5,7 @@ import { PlanForm, defaultPlan } from '@/components/PlanForm';
 import { VerdictDisplay } from '@/components/VerdictDisplay';
 import { DailyTop } from '@/components/DailyTop';
 import { HowItWorks } from '@/components/HowItWorks';
+import { FileUpload } from '@/components/FileUpload';
 import { runAnalysis } from '@/lib/engine';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
