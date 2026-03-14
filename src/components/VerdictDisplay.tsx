@@ -4,6 +4,21 @@ function pct(n: number): string {
   return (n * 100).toFixed(1) + '%';
 }
 
+function TipsterBadge({ tier }: { tier: 'tipster' | 'tipster_premium' }) {
+  if (tier === 'tipster_premium') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+        ⭐ TIPSTER PREMIUM
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-secondary text-muted-foreground">
+      TIPSTER
+    </span>
+  );
+}
+
 function ConfidenceBadge({ confidence }: { confidence: string }) {
   const colors = {
     high: 'bg-primary/20 text-primary',
@@ -32,11 +47,14 @@ function BetCard({ bet }: { bet: BetRecommendation }) {
 
   return (
     <div className={`rounded-lg border ${borderColor} bg-card p-4 ${bet.value > 10 ? glowClass : ''} animate-slide-up`}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <CategoryIcon category={bet.category} />
           <span className="font-semibold text-sm">{bet.selection}</span>
         </div>
+        <TipsterBadge tier={bet.tipsterTier} />
+      </div>
+      <div className="flex items-center justify-between mb-3">
         <ConfidenceBadge confidence={bet.confidence} />
       </div>
       
@@ -79,6 +97,9 @@ interface Props {
 }
 
 export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
+  const premiumBets = result.recommendations.filter(r => r.tipsterTier === 'tipster_premium');
+  const tipsterBets = result.recommendations.filter(r => r.tipsterTier === 'tipster');
+
   const cornersBets = result.recommendations.filter(r => r.category === 'corners');
   const winnerBets = result.recommendations.filter(r => r.category === 'winner');
   const goalsBets = result.recommendations.filter(r => r.category === 'goals');
@@ -170,7 +191,8 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
             <h4 className="text-sm font-semibold text-bet-corners mb-1">⛳ CORNERE</h4>
             {bestCorner ? (
               <div className="text-sm">
-                <span className="font-bold">{bestCorner.selection}</span>
+                <TipsterBadge tier={bestCorner.tipsterTier} />
+                <span className="font-bold ml-2">{bestCorner.selection}</span>
                 <span className="text-muted-foreground ml-2">@ {bestCorner.odds.toFixed(2)}</span>
                 <span className={`ml-2 text-xs ${bestCorner.value > 0 ? 'text-primary' : 'text-destructive'}`}>
                   (value: {bestCorner.value > 0 ? '+' : ''}{bestCorner.value.toFixed(1)}%)
@@ -186,7 +208,8 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
             <h4 className="text-sm font-semibold text-bet-winner mb-1">🏆 SOLIST</h4>
             {bestWinner ? (
               <div className="text-sm">
-                <span className="font-bold">{bestWinner.selection}</span>
+                <TipsterBadge tier={bestWinner.tipsterTier} />
+                <span className="font-bold ml-2">{bestWinner.selection}</span>
                 <span className="text-muted-foreground ml-2">@ {bestWinner.odds.toFixed(2)}</span>
                 <span className={`ml-2 text-xs ${bestWinner.value > 0 ? 'text-primary' : 'text-destructive'}`}>
                   (value: {bestWinner.value > 0 ? '+' : ''}{bestWinner.value.toFixed(1)}%)
@@ -202,7 +225,8 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
             <h4 className="text-sm font-semibold text-bet-goals mb-1">⚽ GOLURI</h4>
             {bestGoal ? (
               <div className="text-sm">
-                <span className="font-bold">{bestGoal.selection}</span>
+                <TipsterBadge tier={bestGoal.tipsterTier} />
+                <span className="font-bold ml-2">{bestGoal.selection}</span>
                 <span className="text-muted-foreground ml-2">@ {bestGoal.odds.toFixed(2)}</span>
                 <span className={`ml-2 text-xs ${bestGoal.value > 0 ? 'text-primary' : 'text-destructive'}`}>
                   (value: {bestGoal.value > 0 ? '+' : ''}{bestGoal.value.toFixed(1)}%)
@@ -216,13 +240,25 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
         </div>
       </div>
 
-      {/* All recommendations */}
-      {result.recommendations.length > 0 && (
+      {/* Tipster Premium section */}
+      {premiumBets.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">📋 Toate pariurile cu value</h3>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-2">⭐ Pronosticuri TIPSTER PREMIUM</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {result.recommendations.map((bet, i) => (
-              <BetCard key={i} bet={bet} />
+            {premiumBets.map((bet, i) => (
+              <BetCard key={`premium-${i}`} bet={bet} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tipster section */}
+      {tipsterBets.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">📋 Pronosticuri TIPSTER</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {tipsterBets.map((bet, i) => (
+              <BetCard key={`tipster-${i}`} bet={bet} />
             ))}
           </div>
         </div>
