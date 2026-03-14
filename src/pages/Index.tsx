@@ -15,14 +15,24 @@ const Index = () => {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [dailyMatches, setDailyMatches] = useState<DailyMatch[]>([]);
+  const [savedMatch, setSavedMatch] = useState<MatchData | null>(null);
 
   const handleAnalyze = () => {
     setAnalyzing(true);
+    setSavedMatch({ ...match });
     setTimeout(() => {
       const analysis = runAnalysis(match, planSet ? plan : undefined);
       setResult(analysis);
       setAnalyzing(false);
     }, 500);
+  };
+
+  const handleReverse = () => {
+    if (savedMatch) {
+      setMatch(savedMatch);
+    }
+    setResult(null);
+    setSavedMatch(null);
   };
 
   const handleAddToDaily = () => {
@@ -36,6 +46,7 @@ const Index = () => {
     setDailyMatches(prev => [...prev, dm]);
     setMatch(defaultMatch());
     setResult(null);
+    setSavedMatch(null);
   };
 
   return (
@@ -84,31 +95,46 @@ const Index = () => {
           )}
         </div>
 
-        {/* Match Data */}
-        <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pasul 2: Date meci (medii/meci)</h2>
-          <MatchInputForm match={match} onChange={setMatch} />
-        </div>
+        {/* Match Data - hide when result is shown */}
+        {!result && (
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pasul 2: Date meci (medii/meci)</h2>
+            <MatchInputForm match={match} onChange={setMatch} />
+          </div>
+        )}
 
-        {/* Analyze button */}
+        {/* Analyze / Reverse buttons */}
         <div className="text-center space-y-3">
-          <Button
-            size="lg"
-            onClick={handleAnalyze}
-            disabled={analyzing}
-            className="px-12 font-bold"
-          >
-            {analyzing ? (
-              <span className="flex items-center gap-2">
-                <span className="animate-pulse-glow">⏳</span> Analizez...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">🔬 Analizează meciul</span>
-            )}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion Full
-          </p>
+          {!result ? (
+            <>
+              <Button
+                size="lg"
+                onClick={handleAnalyze}
+                disabled={analyzing}
+                className="px-12 font-bold"
+              >
+                {analyzing ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-pulse-glow">⏳</span> Analizez...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">🔬 Analizează meciul</span>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion Full
+              </p>
+            </>
+          ) : (
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={handleReverse}
+              className="px-8 font-bold border-accent text-accent hover:bg-accent hover:text-accent-foreground gap-2"
+            >
+              🔄 Reverse — Editează datele
+            </Button>
+          )}
         </div>
 
         {/* Results */}

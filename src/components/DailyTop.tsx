@@ -5,6 +5,15 @@ function pct(n: number): string {
   return (n * 100).toFixed(1) + '%';
 }
 
+function GoldenStars({ count }: { count: number }) {
+  const stars = Math.min(count, 5);
+  return (
+    <span className="text-amber-400 text-sm">
+      {'⭐'.repeat(stars)}
+    </span>
+  );
+}
+
 interface Props {
   matches: DailyMatch[];
   onClear: () => void;
@@ -13,7 +22,6 @@ interface Props {
 export function DailyTop({ matches, onClear }: Props) {
   if (matches.length === 0) return null;
 
-  // Collect all recommendations across all matches, with match info
   const allBets: { bet: BetRecommendation; matchLabel: string }[] = [];
   for (const dm of matches) {
     const label = `${dm.match.homeTeam.name} vs ${dm.match.awayTeam.name}`;
@@ -22,10 +30,14 @@ export function DailyTop({ matches, onClear }: Props) {
     }
   }
 
-  // Sort by value * stability descending
-  allBets.sort((a, b) => (b.bet.value * b.bet.stability) - (a.bet.value * a.bet.stability));
+  // Sort: premium first, then by value * stability
+  allBets.sort((a, b) => {
+    if (a.bet.tipsterTier !== b.bet.tipsterTier) {
+      return a.bet.tipsterTier === 'tipster_premium' ? -1 : 1;
+    }
+    return (b.bet.value * b.bet.stability) - (a.bet.value * a.bet.stability);
+  });
 
-  // Top 10
   const topBets = allBets.filter(b => b.bet.value > 0).slice(0, 10);
 
   const categoryIcon = (cat: string) => {
@@ -46,6 +58,15 @@ export function DailyTop({ matches, onClear }: Props) {
     }
   };
 
+  // Calculate stars for top 3 premium: 5, 4, 3
+  const starsForIndex = (i: number, tier: string): number => {
+    if (tier !== 'tipster_premium') return 0;
+    if (i === 0) return 5;
+    if (i === 1) return 4;
+    if (i === 2) return 3;
+    return 0;
+  };
+
   return (
     <div className="rounded-xl border-2 border-accent/30 bg-card p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -58,7 +79,6 @@ export function DailyTop({ matches, onClear }: Props) {
         </Button>
       </div>
 
-      {/* Match list */}
       <div className="flex flex-wrap gap-2">
         {matches.map(dm => (
           <span key={dm.id} className="bg-secondary text-xs px-3 py-1 rounded-full font-mono">
@@ -70,24 +90,33 @@ export function DailyTop({ matches, onClear }: Props) {
 
       {topBets.length > 0 ? (
         <div className="space-y-2">
-          {topBets.map((item, i) => (
-            <div key={i} className="flex items-center gap-3 bg-secondary/50 rounded-lg p-3 text-sm">
-              <span className="text-lg font-bold text-muted-foreground w-6 text-center">#{i + 1}</span>
-              <span className="text-base">{categoryIcon(item.bet.category)}</span>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold truncate">{item.bet.selection}</div>
-                <div className="text-xs text-muted-foreground truncate">{item.matchLabel}</div>
+          {topBets.map((item, i) => {
+            const stars = starsForIndex(i, item.bet.tipsterTier);
+            return (
+              <div key={i} className={`flex items-center gap-3 rounded-lg p-3 text-sm ${item.bet.tipsterTier === 'tipster_premium' && i < 3 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-secondary/50'}`}>
+                <span className="text-lg font-bold text-muted-foreground w-6 text-center">#{i + 1}</span>
+                <span className="text-base">{categoryIcon(item.bet.category)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate flex items-center gap-2">
+                    {item.bet.selection}
+                    {stars > 0 && <GoldenStars count={stars} />}
+                    {item.bet.tipsterTier === 'tipster_premium' && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">PREMIUM</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{item.matchLabel}</div>
+                </div>
+                <div className="text-right font-mono text-xs space-y-0.5">
+                  <div>Cotă: <span className="text-foreground font-semibold">{item.bet.odds.toFixed(2)}</span></div>
+                  <div>Value: <span className={item.bet.value > 0 ? 'text-primary' : 'text-destructive'}>+{item.bet.value.toFixed(1)}%</span></div>
+                </div>
+                <div className="text-right text-xs space-y-0.5">
+                  <div>Model: <span className="text-primary">{pct(item.bet.modelProbability)}</span></div>
+                  <div>{riskLabel(item.bet.risk)}</div>
+                </div>
               </div>
-              <div className="text-right font-mono text-xs space-y-0.5">
-                <div>Cotă: <span className="text-foreground font-semibold">{item.bet.odds.toFixed(2)}</span></div>
-                <div>Value: <span className={item.bet.value > 0 ? 'text-primary' : 'text-destructive'}>+{item.bet.value.toFixed(1)}%</span></div>
-              </div>
-              <div className="text-right text-xs space-y-0.5">
-                <div>Model: <span className="text-primary">{pct(item.bet.modelProbability)}</span></div>
-                <div>{riskLabel(item.bet.risk)}</div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground text-center">Niciun pariu cu value pozitiv detectat din meciurile analizate.</p>

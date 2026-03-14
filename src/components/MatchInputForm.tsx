@@ -19,6 +19,7 @@ function defaultTeam(name: string): TeamStats {
     formAway: ['D', 'L', 'W', 'D', 'L'],
     xG: 1.3, xGA: 1.1,
     shots: 12, shotsOnTarget: 4,
+    shotsOnTargetHome: 4.5, shotsOnTargetAway: 3.5,
     possession: 50, dangerousAttacks: 40,
     corners: 0, cornersPerMatch: 5,
     cornersPerMatchHome: 5,
@@ -39,8 +40,11 @@ export function defaultMatch(): MatchData {
     oddsHome: 2.0, oddsDraw: 3.3, oddsAway: 3.5,
     oddsOver25: 1.85, oddsUnder25: 2.0,
     oddsBTTSYes: 1.8, oddsBTTSNo: 2.0,
-    oddsOverCorners: 1.85, oddsUnderCorners: 2.0,
-    cornersLine: 10.5,
+    cornerLines: [
+      { line: 10.5, oddsOver: 1.85, oddsUnder: 2.0 },
+      { line: 11.5, oddsOver: 2.10, oddsUnder: 1.75 },
+      { line: 12.5, oddsOver: 2.40, oddsUnder: 1.55 },
+    ],
     isDerby: false,
     homeTeamFatigued: false, awayTeamFatigued: false,
     homeEuropeanMatch: false, awayEuropeanMatch: false,
@@ -52,7 +56,31 @@ interface Props {
   onChange: (match: MatchData) => void;
 }
 
-function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: TeamStats) => void; label: string }) {
+function FormSelector({ form, onChange, label }: { form: ('W' | 'D' | 'L')[]; onChange: (f: ('W' | 'D' | 'L')[]) => void; label: string }) {
+  return (
+    <div>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="flex gap-1 mt-1">
+        {form.map((f, i) => (
+          <Select key={i} value={f} onValueChange={v => {
+            const newForm = [...form];
+            newForm[i] = v as 'W' | 'D' | 'L';
+            onChange(newForm);
+          }}>
+            <SelectTrigger className={`w-14 text-xs font-mono ${f === 'W' ? 'bg-primary/20 text-primary' : f === 'L' ? 'bg-destructive/20 text-destructive' : 'bg-accent/20 text-accent'}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FORM_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TeamForm({ team, onChange, label, isHome }: { team: TeamStats; onChange: (t: TeamStats) => void; label: string; isHome: boolean }) {
   const update = (key: keyof TeamStats, value: any) => onChange({ ...team, [key]: value });
 
   return (
@@ -104,18 +132,37 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <Label className="text-xs text-muted-foreground">Medie șuturi/meci</Label>
           <Input type="number" step="0.1" value={team.shots} onChange={e => update('shots', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Medie șuturi pe poartă/meci</Label>
+          <Label className="text-xs text-muted-foreground">Șuturi pe poartă/meci</Label>
           <Input type="number" step="0.1" value={team.shotsOnTarget} onChange={e => update('shotsOnTarget', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
+          <Label className="text-xs text-muted-foreground">Șuturi pe poartă acasă/meci</Label>
+          <Input type="number" step="0.1" value={team.shotsOnTargetHome} onChange={e => update('shotsOnTargetHome', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Șuturi pe poartă deplasare/meci</Label>
+          <Input type="number" step="0.1" value={team.shotsOnTargetAway} onChange={e => update('shotsOnTargetAway', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div>
           <Label className="text-xs text-muted-foreground">Posesie %</Label>
           <Input type="number" value={team.possession} onChange={e => update('possession', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Medie cartonașe/meci</Label>
+          <Input type="number" step="0.1" value={team.cardsPerMatch} onChange={e => update('cardsPerMatch', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Medie faulturi/meci</Label>
+          <Input type="number" step="0.1" value={team.fouls} onChange={e => update('fouls', +e.target.value)} className="bg-secondary border-border" />
         </div>
       </div>
 
@@ -134,21 +181,6 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <Label className="text-xs text-muted-foreground">Medie cartonașe/meci</Label>
-          <Input type="number" step="0.1" value={team.cardsPerMatch} onChange={e => update('cardsPerMatch', +e.target.value)} className="bg-secondary border-border" />
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Medie faulturi/meci</Label>
-          <Input type="number" step="0.1" value={team.fouls} onChange={e => update('fouls', +e.target.value)} className="bg-secondary border-border" />
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Loc clasament</Label>
-          <Input type="number" value={team.leaguePosition} onChange={e => update('leaguePosition', +e.target.value)} className="bg-secondary border-border" />
-        </div>
-      </div>
-
       <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs text-muted-foreground">Stil de joc</Label>
@@ -162,30 +194,25 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
           </Select>
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">Echipe în ligă</Label>
-          <Input type="number" value={team.totalTeamsInLeague} onChange={e => update('totalTeamsInLeague', +e.target.value)} className="bg-secondary border-border" />
+          <Label className="text-xs text-muted-foreground">Loc clasament / Echipe în ligă</Label>
+          <div className="flex gap-2">
+            <Input type="number" value={team.leaguePosition} onChange={e => update('leaguePosition', +e.target.value)} className="bg-secondary border-border" placeholder="Loc" />
+            <Input type="number" value={team.totalTeamsInLeague} onChange={e => update('totalTeamsInLeague', +e.target.value)} className="bg-secondary border-border" placeholder="Total" />
+          </div>
         </div>
       </div>
 
-      <div>
-        <Label className="text-xs text-muted-foreground">Formă ultimele 5 meciuri</Label>
-        <div className="flex gap-1 mt-1">
-          {team.formLast5.map((f, i) => (
-            <Select key={i} value={f} onValueChange={v => {
-              const newForm = [...team.formLast5];
-              newForm[i] = v as 'W' | 'D' | 'L';
-              update('formLast5', newForm);
-            }}>
-              <SelectTrigger className={`w-14 text-xs font-mono ${f === 'W' ? 'bg-primary/20 text-primary' : f === 'L' ? 'bg-destructive/20 text-destructive' : 'bg-accent/20 text-accent'}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FORM_OPTIONS.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          ))}
-        </div>
-      </div>
+      {/* Form selections */}
+      <FormSelector
+        form={team.formLast5}
+        onChange={f => update('formLast5', f)}
+        label="Formă ultimele 5 meciuri (general)"
+      />
+      <FormSelector
+        form={isHome ? team.formHome : team.formAway}
+        onChange={f => update(isHome ? 'formHome' : 'formAway', f)}
+        label={isHome ? '🏠 Formă ultimele 5 meciuri ACASĂ' : '✈️ Formă ultimele 5 meciuri DEPLASARE'}
+      />
     </div>
   );
 }
@@ -193,6 +220,12 @@ function TeamForm({ team, onChange, label }: { team: TeamStats; onChange: (t: Te
 export function MatchInputForm({ match, onChange }: Props) {
   const updateHome = (t: TeamStats) => onChange({ ...match, homeTeam: t });
   const updateAway = (t: TeamStats) => onChange({ ...match, awayTeam: t });
+
+  const updateCornerLine = (index: number, field: keyof typeof match.cornerLines[0], value: number) => {
+    const newLines = [...match.cornerLines];
+    newLines[index] = { ...newLines[index], [field]: value };
+    onChange({ ...match, cornerLines: newLines });
+  };
 
   return (
     <div className="space-y-6">
@@ -230,10 +263,10 @@ export function MatchInputForm({ match, onChange }: Props) {
       {/* Teams side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
-          <TeamForm team={match.homeTeam} onChange={updateHome} label="🏠 Echipa Gazdă" />
+          <TeamForm team={match.homeTeam} onChange={updateHome} label="🏠 Echipa Gazdă" isHome={true} />
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
-          <TeamForm team={match.awayTeam} onChange={updateAway} label="✈️ Echipa Oaspete" />
+          <TeamForm team={match.awayTeam} onChange={updateAway} label="✈️ Echipa Oaspete" isHome={false} />
         </div>
       </div>
 
@@ -272,20 +305,25 @@ export function MatchInputForm({ match, onChange }: Props) {
             <Input type="number" step="0.01" value={match.oddsBTTSNo} onChange={e => onChange({ ...match, oddsBTTSNo: +e.target.value })} className="bg-secondary border-border" />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label className="text-xs text-muted-foreground">Linia cornere</Label>
-            <Input type="number" step="0.5" value={match.cornersLine ?? ''} onChange={e => onChange({ ...match, cornersLine: +e.target.value })} className="bg-secondary border-border" />
+
+        {/* Corner lines 10.5, 11.5, 12.5 */}
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-2">⛳ Linii Cornere</h4>
+        {match.cornerLines.map((cl, idx) => (
+          <div key={idx} className="grid grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs text-muted-foreground">Linia {cl.line}</Label>
+              <Input type="number" step="0.5" value={cl.line} onChange={e => updateCornerLine(idx, 'line', +e.target.value)} className="bg-secondary border-border" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Over {cl.line}</Label>
+              <Input type="number" step="0.01" value={cl.oddsOver} onChange={e => updateCornerLine(idx, 'oddsOver', +e.target.value)} className="bg-secondary border-border" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Under {cl.line}</Label>
+              <Input type="number" step="0.01" value={cl.oddsUnder} onChange={e => updateCornerLine(idx, 'oddsUnder', +e.target.value)} className="bg-secondary border-border" />
+            </div>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Over cornere</Label>
-            <Input type="number" step="0.01" value={match.oddsOverCorners ?? ''} onChange={e => onChange({ ...match, oddsOverCorners: +e.target.value })} className="bg-secondary border-border" />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Under cornere</Label>
-            <Input type="number" step="0.01" value={match.oddsUnderCorners ?? ''} onChange={e => onChange({ ...match, oddsUnderCorners: +e.target.value })} className="bg-secondary border-border" />
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );

@@ -1,29 +1,30 @@
 export interface TeamStats {
   name: string;
-  // All stats are PER MATCH averages
-  goalsScored: number;       // medie goluri marcate/meci
-  goalsConceded: number;     // medie goluri primite/meci
-  goalsScoredHome: number;   // medie goluri marcate acasă/meci
-  goalsConcededHome: number; // medie goluri primite acasă/meci
-  goalsScoredAway: number;   // medie goluri marcate deplasare/meci
-  goalsConcededAway: number; // medie goluri primite deplasare/meci
+  goalsScored: number;
+  goalsConceded: number;
+  goalsScoredHome: number;
+  goalsConcededHome: number;
+  goalsScoredAway: number;
+  goalsConcededAway: number;
   matchesPlayed: number;
   formLast5: ('W' | 'D' | 'L')[];
   formHome: ('W' | 'D' | 'L')[];
   formAway: ('W' | 'D' | 'L')[];
-  xG: number;               // medie xG/meci
-  xGA: number;               // medie xGA/meci
-  shots: number;             // medie șuturi/meci
-  shotsOnTarget: number;     // medie șuturi pe poartă/meci
+  xG: number;
+  xGA: number;
+  shots: number;
+  shotsOnTarget: number;
+  shotsOnTargetHome: number;
+  shotsOnTargetAway: number;
   possession: number;
-  dangerousAttacks: number;  // medie atacuri periculoase/meci
+  dangerousAttacks: number;
   corners: number;
   cornersPerMatch: number;
   cornersPerMatchHome: number;
   cornersPerMatchAway: number;
   cards: number;
   cardsPerMatch: number;
-  fouls: number;             // medie faulturi/meci
+  fouls: number;
   playStyle: 'possession' | 'counter' | 'pressing' | 'low-block';
   leaguePosition: number;
   totalTeamsInLeague: number;
@@ -40,14 +41,18 @@ export interface MatchData {
   oddsUnder25: number;
   oddsBTTSYes: number;
   oddsBTTSNo: number;
-  oddsOverCorners?: number;
-  oddsUnderCorners?: number;
-  cornersLine?: number;
+  cornerLines: CornerLine[];
   isDerby: boolean;
   homeTeamFatigued: boolean;
   awayTeamFatigued: boolean;
   homeEuropeanMatch: boolean;
   awayEuropeanMatch: boolean;
+}
+
+export interface CornerLine {
+  line: number;
+  oddsOver: number;
+  oddsUnder: number;
 }
 
 export interface UserPlan {
@@ -74,6 +79,7 @@ export interface BetRecommendation {
   confidence: 'high' | 'medium' | 'low';
   stability: number;
   risk: 'low' | 'medium' | 'high';
+  tipsterTier: 'tipster' | 'tipster_premium';
 }
 
 export interface AnalysisResult {
