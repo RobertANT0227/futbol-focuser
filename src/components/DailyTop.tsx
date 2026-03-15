@@ -58,13 +58,16 @@ export function DailyTop({ matches, onClear }: Props) {
     }
   };
 
-  // Calculate stars for top 3 premium: 5, 4, 3
-  const starsForIndex = (i: number, tier: string): number => {
-    if (tier !== 'tipster_premium') return 0;
-    if (i === 0) return 5;
-    if (i === 1) return 4;
-    if (i === 2) return 3;
-    return 0;
+  // Calculate stars based on analysis confidence score
+  const starsForBet = (bet: BetRecommendation): number => {
+    if (bet.tipsterTier !== 'tipster_premium') return 0;
+    // Score = value × stability × modelProbability (normalized)
+    const score = bet.value * bet.stability * bet.modelProbability;
+    if (score > 15) return 5;
+    if (score > 10) return 4;
+    if (score > 6) return 3;
+    if (score > 3) return 2;
+    return 1;
   };
 
   return (
@@ -91,7 +94,7 @@ export function DailyTop({ matches, onClear }: Props) {
       {topBets.length > 0 ? (
         <div className="space-y-2">
           {topBets.map((item, i) => {
-            const stars = starsForIndex(i, item.bet.tipsterTier);
+            const stars = starsForBet(item.bet);
             return (
               <div key={i} className={`flex items-center gap-3 rounded-lg p-3 text-sm ${item.bet.tipsterTier === 'tipster_premium' && i < 3 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-secondary/50'}`}>
                 <span className="text-lg font-bold text-muted-foreground w-6 text-center">#{i + 1}</span>
