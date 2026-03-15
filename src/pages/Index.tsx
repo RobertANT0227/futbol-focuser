@@ -12,10 +12,6 @@ import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/type
 
 const Index = () => {
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('unlocked') === '1');
-
-  if (!unlocked) {
-    return <PasswordGate onUnlock={() => setUnlocked(true)} />;
-  }
   const [match, setMatch] = useState<MatchData>(defaultMatch());
   const [plan, setPlan] = useState<UserPlan>(defaultPlan);
   const [planSet, setPlanSet] = useState(false);
@@ -23,6 +19,10 @@ const Index = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [dailyMatches, setDailyMatches] = useState<DailyMatch[]>([]);
   const [savedMatch, setSavedMatch] = useState<MatchData | null>(null);
+
+  if (!unlocked) {
+    return <PasswordGate onUnlock={() => setUnlocked(true)} />;
+  }
 
   const handleAnalyze = () => {
     setAnalyzing(true);
