@@ -98,7 +98,8 @@ const Index = () => {
 
         {/* Match Data - hide when result is shown */}
         {!result && (
-          <div>
+          <div className="space-y-4">
+            <PasteImporter match={match} onChange={setMatch} />
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pasul 2: Date meci (medii/meci)</h2>
             <MatchInputForm match={match} onChange={setMatch} />
           </div>
