@@ -101,7 +101,7 @@ const Index = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 2: Date meci (medii/meci)</h2>
-              <PasteImporter match={match} onChange={setMatch} />
+              
             </div>
             <MatchInputForm match={match} onChange={setMatch} />
           </div>
