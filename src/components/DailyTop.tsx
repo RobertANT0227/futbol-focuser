@@ -94,7 +94,7 @@ export function DailyTop({ matches, onClear }: Props) {
       {topBets.length > 0 ? (
         <div className="space-y-2">
           {topBets.map((item, i) => {
-            const stars = starsForIndex(i, item.bet.tipsterTier);
+            const stars = starsForBet(item.bet);
             return (
               <div key={i} className={`flex items-center gap-3 rounded-lg p-3 text-sm ${item.bet.tipsterTier === 'tipster_premium' && i < 3 ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-secondary/50'}`}>
                 <span className="text-lg font-bold text-muted-foreground w-6 text-center">#{i + 1}</span>
