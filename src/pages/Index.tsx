@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MatchInputForm, defaultMatch } from '@/components/MatchInputForm';
-import { PasteImporter } from '@/components/PasteImporter';
+
 import { PlanForm, defaultPlan } from '@/components/PlanForm';
 import { VerdictDisplay } from '@/components/VerdictDisplay';
 import { DailyTop } from '@/components/DailyTop';
@@ -101,7 +101,7 @@ const Index = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 2: Date meci (medii/meci)</h2>
-              <PasteImporter match={match} onChange={setMatch} />
+              
             </div>
             <MatchInputForm match={match} onChange={setMatch} />
           </div>
