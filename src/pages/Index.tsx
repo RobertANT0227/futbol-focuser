@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { MatchInputForm, defaultMatch } from '@/components/MatchInputForm';
-
+import { PasteImporter } from '@/components/PasteImporter';
 import { PlanForm, defaultPlan } from '@/components/PlanForm';
 import { VerdictDisplay } from '@/components/VerdictDisplay';
 import { DailyTop } from '@/components/DailyTop';
@@ -64,12 +64,12 @@ const Index = () => {
             <span className="text-2xl">⚽</span>
             <div>
               <h1 className="text-lg font-bold tracking-tight">BetAnalyzer AI</h1>
-              <p className="text-xs text-muted-foreground">Motor de analiză pentru pariuri sportive</p>
+              <p className="text-xs text-muted-foreground">Professional Football Betting Intelligence</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <HowItWorks steps={result?.analysisSteps} />
-            <div className="text-xs font-mono text-muted-foreground">
+            <HowItWorks steps={result?.analysisSteps} result={result} />
+            <div className="text-xs font-mono text-muted-foreground hidden md:block">
               Poisson + Monte Carlo + Kelly
             </div>
           </div>
@@ -107,7 +107,7 @@ const Index = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 2: Date meci (medii/meci)</h2>
-              
+              <PasteImporter match={match} onChange={setMatch} />
             </div>
             <MatchInputForm match={match} onChange={setMatch} />
           </div>
@@ -132,7 +132,7 @@ const Index = () => {
                 )}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion Full
+                Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion Full • AI Explanation
               </p>
             </>
           ) : (
@@ -162,7 +162,7 @@ const Index = () => {
                 onClick={handleAddToDaily}
                 className="px-8 font-bold border-accent text-accent hover:bg-accent hover:text-accent-foreground gap-2"
               >
-                🏅 Adaugă în Topul Zilei
+                🏅 Adaugă în Top of the Day
               </Button>
               <p className="text-xs text-muted-foreground mt-1">
                 Adaugă acest meci în topul zilei și continuă cu alt meci

@@ -25,9 +25,10 @@ export interface TeamStats {
   cards: number;
   cardsPerMatch: number;
   fouls: number;
-  playStyle: 'possession' | 'counter' | 'pressing' | 'low-block';
+  playStyle: 'possession' | 'counter' | 'pressing' | 'low-block' | 'bus-parking' | 'high-press';
   leaguePosition: number;
   totalTeamsInLeague: number;
+  gkSaves: number;
 }
 
 export interface MatchData {
@@ -76,10 +77,13 @@ export interface BetRecommendation {
   value: number;
   odds: number;
   kellyStake: number;
+  kellyPercent: number;
   confidence: 'high' | 'medium' | 'low';
   stability: number;
   risk: 'low' | 'medium' | 'high';
   tipsterTier: 'tipster' | 'tipster_premium';
+  winRate: number;
+  aiExplanation: string;
 }
 
 export interface AnalysisResult {
@@ -98,6 +102,8 @@ export interface AnalysisResult {
   styleAnalysis: string;
   motivationAnalysis: string;
   analysisSteps: AnalysisStep[];
+  detectedStyles: { home: string; away: string };
+  bestBet: BetRecommendation | null;
 }
 
 export interface AnalysisStep {
