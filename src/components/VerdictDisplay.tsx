@@ -4,11 +4,39 @@ function pct(n: number): string {
   return (n * 100).toFixed(1) + '%';
 }
 
+function WinRateBadge({ wr }: { wr: number }) {
+  const color = wr >= 76 ? 'bg-primary/20 text-primary border-primary/30' :
+    wr >= 60 ? 'bg-accent/20 text-accent border-accent/30' :
+    'bg-destructive/20 text-destructive border-destructive/30';
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded border ${color}`}>
+      WR: {wr.toFixed(1)}%
+    </span>
+  );
+}
+
+function StyleBadge({ style }: { style: string }) {
+  const labels: Record<string, { icon: string; label: string; color: string }> = {
+    'bus-parking': { icon: '🚌', label: 'BUS PARKING', color: 'bg-destructive/20 text-destructive' },
+    'high-press': { icon: '⚡', label: 'HIGH PRESS', color: 'bg-primary/20 text-primary' },
+    'pressing': { icon: '🔥', label: 'PRESSING', color: 'bg-accent/20 text-accent' },
+    'possession': { icon: '🎯', label: 'POSESIE', color: 'bg-blue-500/20 text-blue-400' },
+    'counter': { icon: '⚡', label: 'CONTRAATAC', color: 'bg-purple-500/20 text-purple-400' },
+    'low-block': { icon: '🛡️', label: 'LOW-BLOCK', color: 'bg-muted text-muted-foreground' },
+  };
+  const s = labels[style] || { icon: '📊', label: style, color: 'bg-secondary text-muted-foreground' };
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded ${s.color}`}>
+      {s.icon} {s.label}
+    </span>
+  );
+}
+
 function TipsterBadge({ tier }: { tier: 'tipster' | 'tipster_premium' }) {
   if (tier === 'tipster_premium') {
     return (
       <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-        ⭐ TIPSTER PREMIUM
+        ⭐ PREMIUM
       </span>
     );
   }
@@ -19,72 +47,92 @@ function TipsterBadge({ tier }: { tier: 'tipster' | 'tipster_premium' }) {
   );
 }
 
-function ConfidenceBadge({ confidence }: { confidence: string }) {
-  const colors = {
-    high: 'bg-primary/20 text-primary',
-    medium: 'bg-accent/20 text-accent',
-    low: 'bg-destructive/20 text-destructive',
-  };
-  return (
-    <span className={`text-xs font-mono px-2 py-0.5 rounded ${colors[confidence as keyof typeof colors] || ''}`}>
-      {confidence === 'high' ? '🟢 ÎNALT' : confidence === 'medium' ? '🟡 MEDIU' : '🔴 SCĂZUT'}
-    </span>
-  );
-}
-
 function CategoryIcon({ category }: { category: string }) {
   switch (category) {
-    case 'corners': return <span className="text-bet-corners">⛳</span>;
-    case 'winner': return <span className="text-bet-winner">🏆</span>;
-    case 'goals': return <span className="text-bet-goals">⚽</span>;
+    case 'corners': return <span>⛳</span>;
+    case 'winner': return <span>🏆</span>;
+    case 'goals': return <span>⚽</span>;
     default: return null;
   }
 }
 
-function BetCard({ bet }: { bet: BetRecommendation }) {
-  const borderColor = bet.category === 'corners' ? 'border-bet-corners/30' : bet.category === 'winner' ? 'border-bet-winner/30' : 'border-bet-goals/30';
-  const glowClass = bet.category === 'corners' ? 'glow-blue' : bet.category === 'winner' ? 'glow-green' : 'glow-amber';
+function AIExplanationPanel({ explanation }: { explanation: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/30 p-3 mt-2">
+      <div className="flex items-start gap-2">
+        <span className="text-sm mt-0.5">🤖</span>
+        <p className="text-xs text-secondary-foreground leading-relaxed">{explanation}</p>
+      </div>
+    </div>
+  );
+}
+
+function BestBetCard({ bet, homeStyle, awayStyle }: { bet: BetRecommendation; homeStyle: string; awayStyle: string }) {
+  const borderColor = bet.category === 'corners' ? 'border-bet-corners/50' : bet.category === 'winner' ? 'border-bet-winner/50' : 'border-bet-goals/50';
 
   return (
-    <div className={`rounded-lg border ${borderColor} bg-card p-4 ${bet.value > 10 ? glowClass : ''} animate-slide-up`}>
-      <div className="flex items-center justify-between mb-2">
+    <div className={`rounded-xl border-2 ${borderColor} bg-card p-6 glow-green animate-slide-up`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl"><CategoryIcon category={bet.category} /></span>
+          <div>
+            <div className="text-lg font-bold text-foreground">{bet.selection}</div>
+            <div className="text-xs text-muted-foreground font-mono">@ {bet.odds.toFixed(2)}</div>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
-          <CategoryIcon category={bet.category} />
-          <span className="font-semibold text-sm">{bet.selection}</span>
+          <WinRateBadge wr={bet.winRate} />
+          <TipsterBadge tier={bet.tipsterTier} />
         </div>
-        <TipsterBadge tier={bet.tipsterTier} />
       </div>
-      <div className="flex items-center justify-between mb-3">
-        <ConfidenceBadge confidence={bet.confidence} />
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="bg-secondary/50 rounded-lg p-3 text-center">
+          <div className="text-xs text-muted-foreground mb-1">Win Rate</div>
+          <div className="text-xl font-bold text-primary font-mono">{bet.winRate.toFixed(1)}%</div>
+        </div>
+        <div className="bg-secondary/50 rounded-lg p-3 text-center">
+          <div className="text-xs text-muted-foreground mb-1">Value</div>
+          <div className={`text-xl font-bold font-mono ${bet.value > 0 ? 'text-primary' : 'text-destructive'}`}>
+            {bet.value > 0 ? '+' : ''}{bet.value.toFixed(1)}%
+          </div>
+        </div>
+        <div className="bg-secondary/50 rounded-lg p-3 text-center">
+          <div className="text-xs text-muted-foreground mb-1">Kelly Stake</div>
+          <div className="text-xl font-bold text-accent font-mono">{bet.kellyPercent.toFixed(2)}%</div>
+          <div className="text-[10px] text-muted-foreground">{bet.kellyStake.toFixed(1)} LEI</div>
+        </div>
+        <div className="bg-secondary/50 rounded-lg p-3 text-center">
+          <div className="text-xs text-muted-foreground mb-1">Model vs Book</div>
+          <div className="text-sm font-bold font-mono text-primary">{pct(bet.modelProbability)}</div>
+          <div className="text-[10px] text-muted-foreground">vs {pct(bet.bookmakerProbability)}</div>
+        </div>
       </div>
-      
-      <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-        <div>
-          <span className="text-muted-foreground">Model:</span>
-          <span className="ml-1 text-foreground">{pct(bet.modelProbability)}</span>
+
+      <AIExplanationPanel explanation={bet.aiExplanation} />
+    </div>
+  );
+}
+
+function CompactBetRow({ bet, index }: { bet: BetRecommendation; index: number }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-lg p-3 text-sm ${bet.winRate >= 76 ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
+      <span className="text-lg font-bold text-muted-foreground w-6 text-center">#{index + 1}</span>
+      <CategoryIcon category={bet.category} />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold truncate flex items-center gap-2">
+          {bet.selection}
+          {bet.winRate >= 76 && <WinRateBadge wr={bet.winRate} />}
+          <TipsterBadge tier={bet.tipsterTier} />
         </div>
-        <div>
-          <span className="text-muted-foreground">Bookmaker:</span>
-          <span className="ml-1 text-foreground">{pct(bet.bookmakerProbability)}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Value:</span>
-          <span className={`ml-1 ${bet.value > 0 ? 'text-primary' : 'text-destructive'}`}>{bet.value > 0 ? '+' : ''}{bet.value.toFixed(1)}%</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Cotă:</span>
-          <span className="ml-1 text-foreground">{bet.odds.toFixed(2)}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Kelly Stake:</span>
-          <span className="ml-1 text-accent">{bet.kellyStake.toFixed(1)} LEI</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Risc:</span>
-          <span className={`ml-1 ${bet.risk === 'low' ? 'text-primary' : bet.risk === 'medium' ? 'text-accent' : 'text-destructive'}`}>
-            {bet.risk === 'low' ? 'Scăzut' : bet.risk === 'medium' ? 'Mediu' : 'Ridicat'}
-          </span>
-        </div>
+      </div>
+      <div className="text-right font-mono text-xs space-y-0.5">
+        <div>Cotă: <span className="font-semibold">{bet.odds.toFixed(2)}</span></div>
+        <div>Value: <span className={bet.value > 0 ? 'text-primary' : 'text-destructive'}>{bet.value > 0 ? '+' : ''}{bet.value.toFixed(1)}%</span></div>
+      </div>
+      <div className="text-right text-xs space-y-0.5">
+        <div>Kelly: <span className="text-accent">{bet.kellyPercent.toFixed(2)}%</span></div>
+        <div>WR: <span className="text-primary">{bet.winRate.toFixed(1)}%</span></div>
       </div>
     </div>
   );
@@ -97,22 +145,14 @@ interface Props {
 }
 
 export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
-  const premiumBets = result.recommendations.filter(r => r.tipsterTier === 'tipster_premium');
-  const tipsterBets = result.recommendations.filter(r => r.tipsterTier === 'tipster');
-
-  const cornersBets = result.recommendations.filter(r => r.category === 'corners');
-  const winnerBets = result.recommendations.filter(r => r.category === 'winner');
-  const goalsBets = result.recommendations.filter(r => r.category === 'goals');
-
-  const bestCorner = cornersBets.length > 0 ? cornersBets[0] : null;
-  const bestWinner = winnerBets.length > 0 ? winnerBets[0] : null;
-  const bestGoal = goalsBets.length > 0 ? goalsBets[0] : null;
+  const premiumBets = result.recommendations.filter(r => r.winRate >= 76 && r.value > 0);
+  const otherBets = result.recommendations.filter(r => r.winRate < 76 || r.value <= 0);
 
   return (
     <div className="space-y-6">
       {/* Summary header */}
       <div className="gradient-verdict rounded-xl p-6 border border-border">
-        <h2 className="text-xl font-bold text-gradient-primary mb-4">📊 Analiză completă: {homeTeamName} vs {awayTeamName}</h2>
+        <h2 className="text-xl font-bold text-gradient-primary mb-4">📊 {homeTeamName} vs {awayTeamName}</h2>
         
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center">
@@ -129,7 +169,7 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs font-mono">
           <div className="bg-secondary/50 rounded p-2">
             <div className="text-muted-foreground">xG Gazdă</div>
             <div className="text-lg font-bold">{result.homeXG.toFixed(2)}</div>
@@ -146,119 +186,70 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
             <div className="text-muted-foreground">BTTS</div>
             <div className="text-lg font-bold text-bet-goals">{pct(result.bttsProb)}</div>
           </div>
-        </div>
-      </div>
-
-      {/* Monte Carlo */}
-      <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">🎲 Simulare Monte Carlo (10.000)</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
-          <div>Media goluri gazdă: <span className="text-primary">{result.monteCarloResults.avgHomeGoals.toFixed(2)}</span></div>
-          <div>Media goluri oaspete: <span className="text-primary">{result.monteCarloResults.avgAwayGoals.toFixed(2)}</span></div>
-          <div>Media cornere: <span className="text-bet-corners">{result.monteCarloResults.avgCorners.toFixed(1)}</span></div>
-          <div>Over 2.5: <span className="text-bet-goals">{pct(result.monteCarloResults.over25Pct)}</span></div>
-        </div>
-        <div className="mt-3">
-          <div className="text-xs text-muted-foreground mb-1">Top scoruri probabile:</div>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(result.monteCarloResults.scoreDistribution).slice(0, 6).map(([score, prob]) => (
-              <span key={score} className="bg-secondary px-2 py-1 rounded text-xs font-mono">
-                {score} <span className="text-muted-foreground">({(prob * 100).toFixed(1)}%)</span>
-              </span>
-            ))}
+          <div className="bg-secondary/50 rounded p-2">
+            <div className="text-muted-foreground">Cornere</div>
+            <div className="text-lg font-bold text-bet-corners">{result.expectedCorners.toFixed(1)}</div>
           </div>
         </div>
       </div>
 
-      {/* Style & Motivation */}
+      {/* Play Style Detection */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">🎯 Analiză stil</h3>
-          <p className="text-xs text-secondary-foreground leading-relaxed">{result.styleAnalysis}</p>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">🏠 {homeTeamName}</h3>
+            <StyleBadge style={result.detectedStyles.home} />
+          </div>
+          <p className="text-xs text-secondary-foreground leading-relaxed">{result.styleAnalysis.split('. ').filter(s => s.includes(homeTeamName)).join('. ')}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">💪 Motivare</h3>
-          <p className="text-xs text-secondary-foreground leading-relaxed">{result.motivationAnalysis}</p>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">✈️ {awayTeamName}</h3>
+            <StyleBadge style={result.detectedStyles.away} />
+          </div>
+          <p className="text-xs text-secondary-foreground leading-relaxed">{result.styleAnalysis.split('. ').filter(s => s.includes(awayTeamName)).join('. ')}</p>
         </div>
       </div>
 
-      {/* VERDICT FINAL */}
-      <div className="rounded-xl border-2 border-primary/30 bg-card p-6 glow-green">
-        <h2 className="text-lg font-bold text-primary mb-4">🎯 VERDICT FINAL</h2>
-        
-        <div className="space-y-4">
-          <div className="border-l-4 border-bet-corners pl-4">
-            <h4 className="text-sm font-semibold text-bet-corners mb-1">⛳ CORNERE</h4>
-            {bestCorner ? (
-              <div className="text-sm">
-                <TipsterBadge tier={bestCorner.tipsterTier} />
-                <span className="font-bold ml-2">{bestCorner.selection}</span>
-                <span className="text-muted-foreground ml-2">@ {bestCorner.odds.toFixed(2)}</span>
-                <span className={`ml-2 text-xs ${bestCorner.value > 0 ? 'text-primary' : 'text-destructive'}`}>
-                  (value: {bestCorner.value > 0 ? '+' : ''}{bestCorner.value.toFixed(1)}%)
-                </span>
-                <span className="ml-2 text-xs text-accent">Kelly: {bestCorner.kellyStake.toFixed(1)} LEI</span>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">Cornere estimate: {result.expectedCorners.toFixed(1)} — nicio valoare detectată sau linie nedisponibilă</div>
-            )}
-          </div>
-
-          <div className="border-l-4 border-bet-winner pl-4">
-            <h4 className="text-sm font-semibold text-bet-winner mb-1">🏆 SOLIST</h4>
-            {bestWinner ? (
-              <div className="text-sm">
-                <TipsterBadge tier={bestWinner.tipsterTier} />
-                <span className="font-bold ml-2">{bestWinner.selection}</span>
-                <span className="text-muted-foreground ml-2">@ {bestWinner.odds.toFixed(2)}</span>
-                <span className={`ml-2 text-xs ${bestWinner.value > 0 ? 'text-primary' : 'text-destructive'}`}>
-                  (value: {bestWinner.value > 0 ? '+' : ''}{bestWinner.value.toFixed(1)}%)
-                </span>
-                <span className="ml-2 text-xs text-accent">Kelly: {bestWinner.kellyStake.toFixed(1)} LEI</span>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">Niciun solist cu value detectat</div>
-            )}
-          </div>
-
-          <div className="border-l-4 border-bet-goals pl-4">
-            <h4 className="text-sm font-semibold text-bet-goals mb-1">⚽ GOLURI</h4>
-            {bestGoal ? (
-              <div className="text-sm">
-                <TipsterBadge tier={bestGoal.tipsterTier} />
-                <span className="font-bold ml-2">{bestGoal.selection}</span>
-                <span className="text-muted-foreground ml-2">@ {bestGoal.odds.toFixed(2)}</span>
-                <span className={`ml-2 text-xs ${bestGoal.value > 0 ? 'text-primary' : 'text-destructive'}`}>
-                  (value: {bestGoal.value > 0 ? '+' : ''}{bestGoal.value.toFixed(1)}%)
-                </span>
-                <span className="ml-2 text-xs text-accent">Kelly: {bestGoal.kellyStake.toFixed(1)} LEI</span>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">Nicio valoare detectată pe goluri</div>
-            )}
-          </div>
-        </div>
+      {/* Motivation */}
+      <div className="rounded-lg border border-border bg-card p-4">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">💪 Motivare & Context</h3>
+        <p className="text-xs text-secondary-foreground leading-relaxed">{result.motivationAnalysis}</p>
       </div>
 
-      {/* Tipster Premium section */}
+      {/* BEST BET */}
+      {result.bestBet && (
+        <div>
+          <h2 className="text-lg font-bold text-primary mb-3 flex items-center gap-2">🎯 BEST BET — Selecția #1</h2>
+          <BestBetCard bet={result.bestBet} homeStyle={result.detectedStyles.home} awayStyle={result.detectedStyles.away} />
+        </div>
+      )}
+
+      {/* Premium Tips (WR >= 76%) */}
       {premiumBets.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-2">⭐ Pronosticuri TIPSTER PREMIUM</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-2">
+            ⭐ Premium Tips (WR ≥ 76%)
+            <span className="text-xs font-normal text-muted-foreground">— {premiumBets.length} selecții</span>
+          </h3>
+          <div className="space-y-2">
             {premiumBets.map((bet, i) => (
-              <BetCard key={`premium-${i}`} bet={bet} />
+              <div key={`prem-${i}`}>
+                <CompactBetRow bet={bet} index={i} />
+                <AIExplanationPanel explanation={bet.aiExplanation} />
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Tipster section */}
-      {tipsterBets.length > 0 && (
+      {/* Other bets */}
+      {otherBets.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">📋 Pronosticuri TIPSTER</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {tipsterBets.map((bet, i) => (
-              <BetCard key={`tipster-${i}`} bet={bet} />
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">📋 Alte selecții analizate</h3>
+          <div className="space-y-1">
+            {otherBets.map((bet, i) => (
+              <CompactBetRow key={`other-${i}`} bet={bet} index={premiumBets.length + i} />
             ))}
           </div>
         </div>
@@ -266,7 +257,7 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
 
       {result.recommendations.length === 0 && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-center">
-          <p className="text-sm text-destructive">⚠️ Niciun pariu cu value nu a fost detectat conform planului tău. Ajustează parametrii sau verifică datele introduse.</p>
+          <p className="text-sm text-destructive">⚠️ Niciun pariu cu value detectat. Ajustează parametrii sau verifică datele.</p>
         </div>
       )}
     </div>

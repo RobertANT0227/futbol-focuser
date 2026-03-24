@@ -5,7 +5,16 @@ import { Switch } from '@/components/ui/switch';
 import type { TeamStats, MatchData } from '@/lib/types';
 
 const FORM_OPTIONS = ['W', 'D', 'L'] as const;
-const STYLES = ['possession', 'counter', 'pressing', 'low-block'] as const;
+const STYLES = ['possession', 'counter', 'pressing', 'low-block', 'bus-parking', 'high-press'] as const;
+
+const STYLE_LABELS: Record<string, string> = {
+  'possession': '🎯 Posesie',
+  'counter': '⚡ Contraatac',
+  'pressing': '🔥 Pressing',
+  'low-block': '🛡️ Low-Block',
+  'bus-parking': '🚌 Bus Parking',
+  'high-press': '⚡ High Press (Gegenpress)',
+};
 
 function defaultTeam(name: string): TeamStats {
   return {
@@ -29,6 +38,7 @@ function defaultTeam(name: string): TeamStats {
     playStyle: 'possession',
     leaguePosition: 10,
     totalTeamsInLeague: 20,
+    gkSaves: 3,
   };
 }
 
@@ -151,15 +161,26 @@ function TeamForm({ team, onChange, label, isHome }: { team: TeamStats; onChange
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div>
           <Label className="text-xs text-muted-foreground">Posesie %</Label>
           <Input type="number" value={team.possession} onChange={e => update('possession', +e.target.value)} className="bg-secondary border-border" />
         </div>
         <div>
+          <Label className="text-xs text-muted-foreground">Atacuri periculoase/meci</Label>
+          <Input type="number" step="1" value={team.dangerousAttacks} onChange={e => update('dangerousAttacks', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Salvări portar/meci</Label>
+          <Input type="number" step="0.1" value={team.gkSaves} onChange={e => update('gkSaves', +e.target.value)} className="bg-secondary border-border" />
+        </div>
+        <div>
           <Label className="text-xs text-muted-foreground">Medie cartonașe/meci</Label>
           <Input type="number" step="0.1" value={team.cardsPerMatch} onChange={e => update('cardsPerMatch', +e.target.value)} className="bg-secondary border-border" />
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <Label className="text-xs text-muted-foreground">Medie faulturi/meci</Label>
           <Input type="number" step="0.1" value={team.fouls} onChange={e => update('fouls', +e.target.value)} className="bg-secondary border-border" />
@@ -189,7 +210,7 @@ function TeamForm({ team, onChange, label, isHome }: { team: TeamStats; onChange
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {STYLES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              {STYLES.map(s => <SelectItem key={s} value={s}>{STYLE_LABELS[s] || s}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -202,7 +223,6 @@ function TeamForm({ team, onChange, label, isHome }: { team: TeamStats; onChange
         </div>
       </div>
 
-      {/* Form selections */}
       <FormSelector
         form={team.formLast5}
         onChange={f => update('formLast5', f)}
@@ -229,7 +249,6 @@ export function MatchInputForm({ match, onChange }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* League & context */}
       <div className="rounded-lg border border-border bg-card p-4 space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Liga & Context</h3>
         <div>
@@ -260,7 +279,6 @@ export function MatchInputForm({ match, onChange }: Props) {
         </div>
       </div>
 
-      {/* Teams side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-lg border border-border bg-card p-4">
           <TeamForm team={match.homeTeam} onChange={updateHome} label="🏠 Echipa Gazdă" isHome={true} />
@@ -270,7 +288,6 @@ export function MatchInputForm({ match, onChange }: Props) {
         </div>
       </div>
 
-      {/* Odds */}
       <div className="rounded-lg border border-border bg-card p-4 space-y-4">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Cote Bookmaker</h3>
         <div className="grid grid-cols-3 gap-3">
@@ -306,7 +323,6 @@ export function MatchInputForm({ match, onChange }: Props) {
           </div>
         </div>
 
-        {/* Corner lines 10.5, 11.5, 12.5 */}
         <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-2">⛳ Linii Cornere</h4>
         {match.cornerLines.map((cl, idx) => (
           <div key={idx} className="grid grid-cols-3 gap-3">
