@@ -76,10 +76,20 @@ export interface StatPair {
   team2: number;
 }
 
+export type DetectedPlaystyle = 'BUS PARKING' | 'HIGH PRESS' | 'NEUTRAL';
+
+export interface PlaystyleResult {
+  style: DetectedPlaystyle;
+  reasons: string[];
+  bettingSuggestions: string[];
+}
+
 export interface ParsedMatchStats {
   team1: string;
   team2: string;
   stats: Record<string, StatPair>;
+  team1Playstyle: PlaystyleResult;
+  team2Playstyle: PlaystyleResult;
 }
 
 /** Check if a string represents a number: 1.7, 6.78, 50.1%, 6,78 */
