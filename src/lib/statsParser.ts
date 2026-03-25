@@ -260,6 +260,10 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     i++;
   }
 
+  // STEP: Detect playstyles from parsed stats
+  result.team1Playstyle = detectPlaystyleFromStats(result.team1, result.stats, 'team1');
+  result.team2Playstyle = detectPlaystyleFromStats(result.team2, result.stats, 'team2');
+
   return result;
 }
 
