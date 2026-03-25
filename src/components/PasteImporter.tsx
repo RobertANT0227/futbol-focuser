@@ -4,7 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import type { MatchData } from '@/lib/types';
-import { parseStatsText } from '@/lib/statsParser';
+import { parseMatchStats, applyParsedStats } from '@/lib/statsParser';
 
 interface Props {
   match: MatchData;
@@ -20,28 +20,12 @@ export function PasteImporter({ match, onChange }: Props) {
   const handleExtract = () => {
     if (!text.trim()) return;
 
-    const parsed = parseStatsText(text);
-    const updated = JSON.parse(JSON.stringify(match)) as MatchData;
-    const log: string[] = [];
-    let fieldsFound = 0;
+    const parsed = parseMatchStats(text);
+    const { updated, fieldsFound, log } = applyParsedStats(parsed, match);
 
-    for (const stat of parsed) {
-      // Apply to home team
-      if (stat.homeKey in updated.homeTeam) {
-        (updated.homeTeam as any)[stat.homeKey] = stat.team1;
-        fieldsFound++;
-      }
-      // Apply to away team
-      if (stat.awayKey in updated.awayTeam) {
-        (updated.awayTeam as any)[stat.awayKey] = stat.team2;
-        fieldsFound++;
-      }
-      log.push(`${stat.name} → ${stat.team1} / ${stat.team2}`);
-    }
-
-    onChange(updated);
+    onChange(updated as MatchData);
     setDebugLog(log);
-    setStatus(`✅ ${fieldsFound} câmpuri completate din ${parsed.length} statistici detectate.`);
+    setStatus(`✅ ${fieldsFound} câmpuri completate din ${Object.keys(parsed.stats).length} statistici detectate.`);
   };
 
   return (
@@ -53,17 +37,17 @@ export function PasteImporter({ match, onChange }: Props) {
       </DialogTrigger>
       <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-sm">📋 Import Statistici (Sequential Parser)</DialogTitle>
+          <DialogTitle className="text-sm">📋 Import Statistici</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div>
             <Label className="text-xs text-muted-foreground">
-              Lipește statisticile copiate — fiecare stat pe linie separată, apoi valorile numerice
+              Lipește statisticile copiate — format: Echipa1, Echipa2, apoi val1 / stat / val2
             </Label>
             <Textarea
               value={text}
               onChange={e => { setText(e.target.value); setStatus(null); setDebugLog([]); }}
-              placeholder={`Goluri\n1.6\n2.1\nPosesie\n51.9%\n57.8%\nxG\n2.5\n1.1\nȘuturi pe poartă\n7.3\n3.8\nCornere\n7.4\n5.0\nFaulturi\n9.3\n15.0`}
+              placeholder={`Barcelona\nSevilla\n2.7\nGoluri\n1.3\n69.2%\nPosesie\n53.7%\n2.5\nxG\n1.1\n7.3\nȘuturi pe poartă\n3.8\n7.4\nCornere\n5.0`}
               className="bg-secondary border-border min-h-[180px] mt-1 font-mono text-xs"
             />
           </div>
@@ -75,7 +59,7 @@ export function PasteImporter({ match, onChange }: Props) {
           </div>
           {debugLog.length > 0 && (
             <div className="bg-muted/50 rounded p-2 space-y-0.5">
-              <p className="text-xs font-semibold text-muted-foreground mb-1">Parsed results:</p>
+              <p className="text-xs font-semibold text-muted-foreground mb-1">Parsed:</p>
               {debugLog.map((line, i) => (
                 <p key={i} className="text-xs font-mono text-foreground">{line}</p>
               ))}
