@@ -1,7 +1,7 @@
 /**
- * Strict deterministic football stats parser v3.
+ * Strict deterministic football stats parser v4.
  * No AI guessing — pure sequential logic with text normalization.
- * Features: team detection, GM/GP blocks, strict key lock, no overwrites.
+ * Features: team detection, table-mode GM/GP, Sinteza/Acasa/Deplasare, strict key lock.
  */
 
 // ===== TEXT NORMALIZATION =====
@@ -31,41 +31,64 @@ function toNumber(line: string): number {
   return parseFloat(line.replace(/%/g, '').replace(/,/g, '.').trim());
 }
 
+// ===== EXTRACT ALL NUMBERS FROM A LINE =====
+function extractNumbersFromLine(line: string): number[] {
+  const cleaned = line.replace(/,/g, '.').replace(/%/g, '');
+  const matches = cleaned.match(/-?\d+\.?\d*/g);
+  if (!matches) return [];
+  return matches.map(m => parseFloat(m)).filter(n => !isNaN(n) && isFinite(n));
+}
+
 // ===== TEAM NAME DETECTION =====
 function isTeamName(line: string): boolean {
   if (line.length <= 3) return false;
   if (isNumber(line)) return false;
-  // Must contain letters
   if (!/[a-zA-ZăâîșțĂÂÎȘȚ]/.test(line)) return false;
-  // Must NOT contain standalone numbers (allow letters+numbers like "FC U 1948")
   const norm = normalize(line);
   if (isNoiseLine(norm)) return false;
   if (matchStat(norm)) return false;
-  if (isGmGpTrigger(norm)) return false;
+  if (isTableHeader(norm)) return false;
+  if (isSintezaLine(norm)) return false;
+  if (isAcasaLine(norm) || isDeplaclareLine(norm)) return false;
   return true;
 }
 
 // ===== NOISE FILTER =====
 const NOISE_PATTERNS = [
-  'top statistici', 'total', 'medie', 'ultimele 5', 'ppm',
+  'top statistici', 'total', 'ultimele 5', 'ppm',
   'statistici cheie', 'rezumat', 'clasament', 'forma echipei',
-  'sintetizat', 'acasa', 'deplasare', 'general',
+  'general',
 ];
 
 function isNoiseLine(normalized: string): boolean {
+  // Also treat pure "/meci" as noise
+  if (normalized === '/meci' || normalized === 'meci') return true;
   return NOISE_PATTERNS.some(p => normalized === p || normalized.startsWith(p + ' '));
 }
 
-// ===== GM/GP TRIGGER =====
-const GM_GP_TRIGGERS = ['sintetizat', 'gm', 'gp', 'medie'];
+// ===== TABLE HEADER DETECTION =====
+function isTableHeader(normalized: string): boolean {
+  return (normalized.includes('gm') && normalized.includes('gp')) ||
+         (normalized.includes('gm') && normalized.includes('medie')) ||
+         (normalized.includes('gp') && normalized.includes('medie'));
+}
 
-function isGmGpTrigger(normalized: string): boolean {
-  return GM_GP_TRIGGERS.some(t => normalized === t || normalized.startsWith(t + ':') || normalized.startsWith(t + ' '));
+// ===== SINTEZA / SINTETIZAT DETECTION =====
+function isSintezaLine(normalized: string): boolean {
+  return normalized.startsWith('sintez') || normalized.startsWith('sintetizat');
+}
+
+// ===== ACASA / DEPLASARE DETECTION =====
+function isAcasaLine(normalized: string): boolean {
+  return normalized === 'acasa' || normalized.startsWith('acasa ');
+}
+
+function isDeplaclareLine(normalized: string): boolean {
+  return normalized === 'deplasare' || normalized.startsWith('deplasare ');
 }
 
 // ===== STRICT STAT MAPPING (priority order: most specific first) =====
 const STAT_MATCHERS: { pattern: string; key: string; exact?: boolean }[] = [
-  // Priority 1: very specific (exact or long phrases)
   { pattern: 'suturi pe poarta', key: 'shots_on_target' },
   { pattern: 'shots on target', key: 'shots_on_target' },
   { pattern: 'ocazii mari create', key: 'big_chances' },
@@ -84,7 +107,6 @@ const STAT_MATCHERS: { pattern: string; key: string; exact?: boolean }[] = [
   { pattern: 'gk saves', key: 'gk_saves' },
   { pattern: 'pase cheie', key: 'key_passes' },
   { pattern: 'key passes', key: 'key_passes' },
-  // Priority 2: shorter patterns
   { pattern: 'shots', key: 'shots' },
   { pattern: 'xg', key: 'xg', exact: true },
   { pattern: 'goluri', key: 'goals' },
@@ -130,16 +152,19 @@ const STAT_TO_FIELD: Record<string, string> = {
   'offsides': 'offsides',
 };
 
-// ===== SAFE NUMBER COLLECTOR =====
+// ===== SAFE NUMBER COLLECTOR (scan forward, skip text, collect N numbers) =====
 function getNextNumbers(lines: string[], startIndex: number, count: number): { values: number[]; consumed: number } {
   const values: number[] = [];
   let consumed = 0;
   let idx = startIndex;
   while (idx < lines.length && values.length < count) {
-    if (isNumber(lines[idx])) {
-      values.push(toNumber(lines[idx]));
+    // Extract numbers from line (could be inline or standalone)
+    const lineNums = extractNumbersFromLine(lines[idx]);
+    if (lineNums.length > 0) {
+      for (const n of lineNums) {
+        if (values.length < count) values.push(n);
+      }
     }
-    // skip text lines silently
     consumed++;
     idx++;
   }
@@ -158,12 +183,22 @@ export interface TeamGmGp {
   average: number;
 }
 
+export interface TeamHomeAway {
+  scored: number;
+  conceded: number;
+  total: number;
+}
+
 export interface ParsedMatchStats {
   team1: string;
   team2: string;
   stats: Record<string, StatPair>;
   team1GmGp?: TeamGmGp;
   team2GmGp?: TeamGmGp;
+  team1Home?: TeamHomeAway;
+  team1Away?: TeamHomeAway;
+  team2Home?: TeamHomeAway;
+  team2Away?: TeamHomeAway;
   debugLog: string[];
 }
 
@@ -186,7 +221,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
 
   const log = (msg: string) => result.debugLog.push(msg);
 
-  // STEP 1: Detect team names (first 2 text lines that look like team names)
+  // STEP 1: Detect team names
   let teamNamesFound = 0;
   let dataStartIndex = 0;
 
@@ -204,14 +239,15 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
   }
 
-  // STEP 2: Parse stats sequentially with no-overwrite rule
-  let currentTeamBlock = 0; // 0 = shared, 1 = team1 block, 2 = team2 block
+  // STEP 2: Parse stats sequentially
+  let currentTeamBlock = 0; // 0=shared, 1=team1, 2=team2
+  let tableMode = false;
   let i = dataStartIndex;
 
   while (i < lines.length) {
     const norm = normalize(lines[i]);
 
-    // Skip noise
+    // Skip pure noise
     if (isNoiseLine(norm)) { i++; continue; }
 
     // Detect team name repetition → new block
@@ -228,28 +264,113 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       continue;
     }
 
-    // GM/GP block: "Sintetizat" or "GM" → collect next 3 numbers
-    if (isGmGpTrigger(norm)) {
-      const { values, consumed } = getNextNumbers(lines, i + 1, 3);
-      if (values.length === 3) {
-        const gmgp: TeamGmGp = { scored: values[0], conceded: values[1], average: values[2] };
+    // TABLE HEADER: "GM GP Medie" → activate table mode
+    if (isTableHeader(norm)) {
+      tableMode = true;
+      log(`📋 Table header detected: "${lines[i]}" → table mode ON`);
+      i++;
+      continue;
+    }
+
+    // SINTEZA / SINTETIZAT: collect next 3 numbers (stacked or inline)
+    if (isSintezaLine(norm)) {
+      // First check if numbers are inline: "Sinteza 1.67"
+      const inlineNums = extractNumbersFromLine(lines[i]);
+      let gmgpValues: number[] = [];
+      let consumed = 0;
+
+      if (inlineNums.length >= 3) {
+        gmgpValues = inlineNums.slice(0, 3);
+      } else {
+        // Start with any inline numbers, then collect remaining from next lines
+        gmgpValues = [...inlineNums];
+        const remaining = 3 - gmgpValues.length;
+        const { values, consumed: c } = getNextNumbers(lines, i + 1, remaining);
+        gmgpValues.push(...values);
+        consumed = c;
+      }
+
+      if (gmgpValues.length === 3) {
+        const gmgp: TeamGmGp = { scored: gmgpValues[0], conceded: gmgpValues[1], average: gmgpValues[2] };
         if (currentTeamBlock === 2) {
           result.team2GmGp = gmgp;
-          log(`📊 GM/GP Team 2: scored=${values[0]}, conceded=${values[1]}, avg=${values[2]}`);
-        } else {
-          // Default to team1 or first unset
-          if (!result.team1GmGp) {
-            result.team1GmGp = gmgp;
-            log(`📊 GM/GP Team 1: scored=${values[0]}, conceded=${values[1]}, avg=${values[2]}`);
-          } else if (!result.team2GmGp) {
-            result.team2GmGp = gmgp;
-            log(`📊 GM/GP Team 2: scored=${values[0]}, conceded=${values[1]}, avg=${values[2]}`);
-          }
+          log(`📊 Sinteza Team 2: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+        } else if (!result.team1GmGp) {
+          result.team1GmGp = gmgp;
+          log(`📊 Sinteza Team 1: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+        } else if (!result.team2GmGp) {
+          result.team2GmGp = gmgp;
+          log(`📊 Sinteza Team 2: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
         }
         i += 1 + consumed;
         continue;
       }
-      log(`⚠️ GM/GP block invalid (found ${values.length}/3 numbers)`);
+      log(`⚠️ Sinteza block invalid (found ${gmgpValues.length}/3 numbers)`);
+      i++;
+      continue;
+    }
+
+    // ACASA line: extract 3 inline numbers
+    if (isAcasaLine(norm)) {
+      const nums = extractNumbersFromLine(lines[i]);
+      let homeValues = nums;
+      let consumed = 0;
+
+      // If not enough inline, collect from next lines
+      if (homeValues.length < 3) {
+        const { values, consumed: c } = getNextNumbers(lines, i + 1, 3 - homeValues.length);
+        homeValues = [...homeValues, ...values];
+        consumed = c;
+      }
+
+      if (homeValues.length >= 3) {
+        const ha: TeamHomeAway = { scored: homeValues[0], conceded: homeValues[1], total: homeValues[2] };
+        if (currentTeamBlock === 2) {
+          result.team2Home = ha;
+          log(`🏠 Acasa Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+        } else if (!result.team1Home) {
+          result.team1Home = ha;
+          log(`🏠 Acasa Team 1: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+        } else if (!result.team2Home) {
+          result.team2Home = ha;
+          log(`🏠 Acasa Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      log(`⚠️ Acasa line invalid (found ${homeValues.length}/3 numbers)`);
+      i++;
+      continue;
+    }
+
+    // DEPLASARE line: extract 3 inline numbers
+    if (isDeplaclareLine(norm)) {
+      const nums = extractNumbersFromLine(lines[i]);
+      let awayValues = nums;
+      let consumed = 0;
+
+      if (awayValues.length < 3) {
+        const { values, consumed: c } = getNextNumbers(lines, i + 1, 3 - awayValues.length);
+        awayValues = [...awayValues, ...values];
+        consumed = c;
+      }
+
+      if (awayValues.length >= 3) {
+        const ha: TeamHomeAway = { scored: awayValues[0], conceded: awayValues[1], total: awayValues[2] };
+        if (currentTeamBlock === 2) {
+          result.team2Away = ha;
+          log(`✈️ Deplasare Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+        } else if (!result.team1Away) {
+          result.team1Away = ha;
+          log(`✈️ Deplasare Team 1: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+        } else if (!result.team2Away) {
+          result.team2Away = ha;
+          log(`✈️ Deplasare Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      log(`⚠️ Deplasare line invalid (found ${awayValues.length}/3 numbers)`);
       i++;
       continue;
     }
@@ -262,12 +383,11 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
         const statKey = matchStat(statNorm);
         if (statKey && i + 2 < lines.length && isNumber(lines[i + 2])) {
           const value2 = toNumber(lines[i + 2]);
-          // NO OVERWRITE: only assign if key not already set
           if (!(statKey in result.stats)) {
             result.stats[statKey] = { team1: value1, team2: value2 };
-            log(`✅ Detected: "${lines[i + 1]}" → Mapped to: ${statKey} → Values: ${value1} / ${value2}`);
+            log(`✅ Detected: "${lines[i + 1]}" → ${statKey} → ${value1} / ${value2}`);
           } else {
-            log(`🔒 SKIP (already set): ${statKey} = ${result.stats[statKey].team1}/${result.stats[statKey].team2}`);
+            log(`🔒 SKIP (already set): ${statKey}`);
           }
           i += 3;
           continue;
@@ -287,9 +407,9 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
 
         if (!(statKey in result.stats)) {
           result.stats[statKey] = { team1: value1, team2: value2 };
-          log(`✅ Detected: "${lines[i]}" → Mapped to: ${statKey} → Values: ${value1} / ${value2}`);
+          log(`✅ Detected: "${lines[i]}" → ${statKey} → ${value1} / ${value2}`);
         } else {
-          log(`🔒 SKIP (already set): ${statKey} = ${result.stats[statKey].team1}/${result.stats[statKey].team2}`);
+          log(`🔒 SKIP (already set): ${statKey}`);
         }
         i += advance;
         continue;
@@ -299,12 +419,12 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     i++;
   }
 
-  // VALIDATION: shots_on_target should not exceed shots
+  // VALIDATION
   if (result.stats['shots_on_target'] && result.stats['shots']) {
     const sot = result.stats['shots_on_target'];
     const shots = result.stats['shots'];
     if (sot.team1 > shots.team1 || sot.team2 > shots.team2) {
-      log(`⚠️ VALIDATION: shots_on_target (${sot.team1}/${sot.team2}) > shots (${shots.team1}/${shots.team2}) — keeping values but flagged`);
+      log(`⚠️ VALIDATION: shots_on_target > shots — flagged`);
     }
   }
 
@@ -329,21 +449,47 @@ export function applyParsedStats(
     fieldsFound++;
   }
 
-  // Apply GM/GP
+  // Apply GM/GP (Sinteza)
   if (parsed.team1GmGp) {
     updated.homeTeam.goalsScored = parsed.team1GmGp.scored;
     updated.homeTeam.goalsConceded = parsed.team1GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 GM/GP → Home: scored=${parsed.team1GmGp.scored}, conceded=${parsed.team1GmGp.conceded}, avg=${parsed.team1GmGp.average}`);
+    log.push(`📊 GM/GP → Home: ${parsed.team1GmGp.scored} / ${parsed.team1GmGp.conceded} (avg ${parsed.team1GmGp.average})`);
   }
   if (parsed.team2GmGp) {
     updated.awayTeam.goalsScored = parsed.team2GmGp.scored;
     updated.awayTeam.goalsConceded = parsed.team2GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 GM/GP → Away: scored=${parsed.team2GmGp.scored}, conceded=${parsed.team2GmGp.conceded}, avg=${parsed.team2GmGp.average}`);
+    log.push(`📊 GM/GP → Away: ${parsed.team2GmGp.scored} / ${parsed.team2GmGp.conceded} (avg ${parsed.team2GmGp.average})`);
   }
 
-  // Apply stats by KEY (never by position)
+  // Apply Home/Away
+  if (parsed.team1Home) {
+    updated.homeTeam.goalsScoredHome = parsed.team1Home.scored;
+    updated.homeTeam.goalsConcededHome = parsed.team1Home.conceded;
+    fieldsFound += 2;
+    log.push(`🏠 Acasa → Home: ${parsed.team1Home.scored} / ${parsed.team1Home.conceded} (total ${parsed.team1Home.total})`);
+  }
+  if (parsed.team1Away) {
+    updated.homeTeam.goalsScoredAway = parsed.team1Away.scored;
+    updated.homeTeam.goalsConcededAway = parsed.team1Away.conceded;
+    fieldsFound += 2;
+    log.push(`✈️ Deplasare → Home team away: ${parsed.team1Away.scored} / ${parsed.team1Away.conceded}`);
+  }
+  if (parsed.team2Home) {
+    updated.awayTeam.goalsScoredHome = parsed.team2Home.scored;
+    updated.awayTeam.goalsConcededHome = parsed.team2Home.conceded;
+    fieldsFound += 2;
+    log.push(`🏠 Acasa → Away team home: ${parsed.team2Home.scored} / ${parsed.team2Home.conceded}`);
+  }
+  if (parsed.team2Away) {
+    updated.awayTeam.goalsScoredAway = parsed.team2Away.scored;
+    updated.awayTeam.goalsConcededAway = parsed.team2Away.conceded;
+    fieldsFound += 2;
+    log.push(`✈️ Deplasare → Away team away: ${parsed.team2Away.scored} / ${parsed.team2Away.conceded}`);
+  }
+
+  // Apply stats by KEY
   for (const [statKey, pair] of Object.entries(parsed.stats)) {
     const fieldName = STAT_TO_FIELD[statKey];
     if (fieldName && fieldName in updated.homeTeam) {
