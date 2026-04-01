@@ -4,41 +4,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import type { MatchData } from '@/lib/types';
-import { parseMatchStats, applyParsedStats, type ParsedMatchStats, type PlaystyleResult } from '@/lib/statsParser';
+import { parseMatchStats, applyParsedStats, type ParsedMatchStats } from '@/lib/statsParser';
 
 interface Props {
   match: MatchData;
   onChange: (match: MatchData) => void;
-}
-
-function PlaystyleCard({ teamName, result }: { teamName: string; result: PlaystyleResult }) {
-  const icon = result.style === 'BUS PARKING' ? '🚌' : result.style === 'HIGH PRESS' ? '⚡' : '⚪';
-  const colorClass = result.style === 'BUS PARKING'
-    ? 'border-orange-500/50 bg-orange-500/10'
-    : result.style === 'HIGH PRESS'
-    ? 'border-red-500/50 bg-red-500/10'
-    : 'border-border bg-muted/30';
-
-  return (
-    <div className={`rounded-md border p-2 ${colorClass}`}>
-      <p className="text-xs font-bold">
-        {icon} {teamName || 'Team'}: <span className="uppercase">{result.style}</span>
-      </p>
-      {result.reasons.length > 0 && (
-        <ul className="mt-1 space-y-0.5">
-          {result.reasons.map((r, i) => (
-            <li key={i} className="text-xs text-muted-foreground">• {r}</li>
-          ))}
-        </ul>
-      )}
-      {result.bettingSuggestions.length > 0 && (
-        <div className="mt-1 pt-1 border-t border-border/50">
-          <p className="text-xs font-semibold text-primary">Betting suggestions:</p>
-          <p className="text-xs text-muted-foreground">{result.bettingSuggestions.join(' · ')}</p>
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function PasteImporter({ match, onChange }: Props) {
@@ -90,17 +60,32 @@ export function PasteImporter({ match, onChange }: Props) {
             {status && <span className="text-xs text-primary">{status}</span>}
           </div>
 
-          {parsed && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground">🎯 Playstyle Detection:</p>
-              <PlaystyleCard teamName={parsed.team1} result={parsed.team1Playstyle} />
-              <PlaystyleCard teamName={parsed.team2} result={parsed.team2Playstyle} />
+          {parsed && Object.keys(parsed.stats).length > 0 && (
+            <div className="rounded-md border border-border overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/50">
+                    <th className="text-left p-2 font-semibold text-muted-foreground">Stat</th>
+                    <th className="text-center p-2 font-semibold text-muted-foreground">{parsed.team1 || 'Team 1'}</th>
+                    <th className="text-center p-2 font-semibold text-muted-foreground">{parsed.team2 || 'Team 2'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(parsed.stats).map(([key, pair]) => (
+                    <tr key={key} className="border-t border-border/50">
+                      <td className="p-2 font-mono text-muted-foreground">{key}</td>
+                      <td className="p-2 text-center font-bold">{pair.team1}</td>
+                      <td className="p-2 text-center font-bold">{pair.team2}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
           {debugLog.length > 0 && (
             <div className="bg-muted/50 rounded p-2 space-y-0.5">
-              <p className="text-xs font-semibold text-muted-foreground mb-1">Parsed:</p>
+              <p className="text-xs font-semibold text-muted-foreground mb-1">Debug Log:</p>
               {debugLog.map((line, i) => (
                 <p key={i} className="text-xs font-mono text-foreground">{line}</p>
               ))}
