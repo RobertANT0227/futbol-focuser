@@ -27,7 +27,8 @@ export function PasteImporter({ match, onChange }: Props) {
 
     onChange(updated as MatchData);
     setDebugLog(log);
-    setStatus(`✅ ${fieldsFound} câmpuri completate din ${Object.keys(p.stats).length} statistici detectate.`);
+    const gmGpCount = (p.team1GmGp ? 1 : 0) + (p.team2GmGp ? 1 : 0);
+    setStatus(`✅ ${fieldsFound} câmpuri completate din ${Object.keys(p.stats).length} statistici + ${gmGpCount} blocuri GM/GP.`);
   };
 
   return (
