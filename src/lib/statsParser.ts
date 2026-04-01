@@ -203,11 +203,6 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
   return result;
 }
 
-// Helper for inline use
-function value2(line: string): number {
-  return toNumber(line);
-}
-
 // ===== APPLY PARSED STATS TO MATCH DATA =====
 export function applyParsedStats(
   parsed: ParsedMatchStats,
