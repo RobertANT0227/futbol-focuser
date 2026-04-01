@@ -186,7 +186,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       if (i + 1 < lines.length && isNumber(lines[i + 1])) {
         const value1 = toNumber(lines[i + 1]);
         if (i + 2 < lines.length && isNumber(lines[i + 2])) {
-          result.stats[statKey] = { team1: value1, team2: value2(lines[i + 2]) };
+          result.stats[statKey] = { team1: value1, team2: toNumber(lines[i + 2]) };
           i += 3;
         } else {
           // Only one value found — assign to team1 only
