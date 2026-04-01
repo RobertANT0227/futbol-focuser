@@ -14,17 +14,8 @@ function formFactor(form: ('W' | 'D' | 'L')[]): number {
   return 1.0;
 }
 
-// ===== PLAY STYLE DETECTION =====
+// ===== PLAY STYLE — manual only, no auto detection =====
 function detectPlayStyle(team: TeamStats): 'possession' | 'counter' | 'pressing' | 'low-block' | 'bus-parking' | 'high-press' {
-  // Bus Parking detection
-  if (team.possession < 43 && team.shots < 8 && team.dangerousAttacks < 38 && team.gkSaves >= 4) {
-    return 'bus-parking';
-  }
-  // High Press (Gegenpress) detection
-  if (team.fouls >= 13 && team.dangerousAttacks >= 55 && team.shots >= 14 && team.cardsPerMatch >= 2) {
-    return 'high-press';
-  }
-  // Fall back to manual selection
   return team.playStyle;
 }
 
