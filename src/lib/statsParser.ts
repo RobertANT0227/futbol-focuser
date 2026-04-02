@@ -345,6 +345,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
 
     // DEPLASARE line: extract 3 inline numbers
+    // VALUE ORDER: val1=GM(goluri marcate deplasare), val2=GP(goluri primite deplasare), val3=total
     if (isDeplaclareLine(norm)) {
       const nums = extractNumbersFromLine(lines[i]);
       let awayValues = nums;
@@ -357,16 +358,17 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (awayValues.length >= 3) {
+        // CRITICAL: val1=GM_deplasare, val2=GP_deplasare, val3=total — NEVER swap
         const ha: TeamHomeAway = { scored: awayValues[0], conceded: awayValues[1], total: awayValues[2] };
         if (currentTeamBlock === 2) {
           result.team2Away = ha;
-          log(`✈️ Deplasare Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`✈️ Deplasare Team 2: GM_deplasare=${ha.scored}, GP_deplasare=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team1Away) {
           result.team1Away = ha;
-          log(`✈️ Deplasare Team 1: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`✈️ Deplasare Team 1: GM_deplasare=${ha.scored}, GP_deplasare=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team2Away) {
           result.team2Away = ha;
-          log(`✈️ Deplasare Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`✈️ Deplasare Team 2: GM_deplasare=${ha.scored}, GP_deplasare=${ha.conceded}, total=${ha.total}`);
         }
         i += 1 + consumed;
         continue;
