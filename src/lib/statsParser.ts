@@ -53,11 +53,79 @@ function isTeamName(line: string): boolean {
   return true;
 }
 
+// ===== FORM RESULT DETECTION =====
+const FORM_MAP: Record<string, 'W' | 'D' | 'L'> = {
+  'v': 'W', 'w': 'W', 'victorie': 'W',
+  'e': 'D', 'd': 'D', 'egal': 'D',
+  'i': 'L', 'l': 'L', 'infrangere': 'L',
+};
+
+function isFormResult(token: string): boolean {
+  return token.toLowerCase() in FORM_MAP;
+}
+
+function toFormResult(token: string): 'W' | 'D' | 'L' {
+  return FORM_MAP[token.toLowerCase()] || 'L';
+}
+
+function extractFormResults(lines: string[], startIndex: number, maxCount: number): { results: ('W' | 'D' | 'L')[]; consumed: number } {
+  const results: ('W' | 'D' | 'L')[] = [];
+  let consumed = 0;
+  let idx = startIndex;
+
+  while (idx < lines.length && results.length < maxCount) {
+    const line = lines[idx].trim();
+    // Try inline: "W L L W L" or "V E I V I"
+    const tokens = line.split(/[\s,;]+/).filter(t => t.length > 0);
+    let foundAny = false;
+    for (const token of tokens) {
+      const clean = removeDiacritics(token.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+      if (clean && isFormResult(clean) && results.length < maxCount) {
+        results.push(toFormResult(clean));
+        foundAny = true;
+      }
+    }
+    if (foundAny) {
+      consumed++;
+      idx++;
+      continue;
+    }
+    // If line is not a form result and we already have some, stop
+    if (results.length > 0) break;
+    // If line has numbers or is noise, skip it but keep looking
+    if (isNumber(line) || line.length === 0) {
+      consumed++;
+      idx++;
+      continue;
+    }
+    // Not a form result line — stop
+    break;
+  }
+  return { results, consumed };
+}
+
+// ===== FORM HEADER DETECTION =====
+function isFormHeader(normalized: string): boolean {
+  return normalized.includes('mj') && (normalized.includes('v') || normalized.includes('e'));
+}
+
+function isFormaSintezaLine(normalized: string): boolean {
+  return normalized.startsWith('sintez') || normalized === 'general' || 
+         normalized.startsWith('forma ultimele') || normalized.startsWith('forma general');
+}
+
+function isFormaAcasaLine(normalized: string): boolean {
+  return normalized === 'acasa' || normalized.startsWith('acasa ') || normalized.startsWith('forma acasa');
+}
+
+function isFormaDeplaclareLine(normalized: string): boolean {
+  return normalized === 'deplasare' || normalized.startsWith('deplasare ') || normalized.startsWith('forma deplasare');
+}
+
 // ===== NOISE FILTER =====
 const NOISE_PATTERNS = [
   'top statistici', 'total', 'ultimele 5', 'ppm',
   'statistici cheie', 'rezumat', 'clasament', 'forma echipei',
-  'general',
 ];
 
 function isNoiseLine(normalized: string): boolean {
