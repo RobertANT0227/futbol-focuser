@@ -50,14 +50,87 @@ function isTeamName(line: string): boolean {
   if (isTableHeader(norm)) return false;
   if (isSintezaLine(norm)) return false;
   if (isAcasaLine(norm) || isDeplaclareLine(norm)) return false;
+  if (isFormHeader(norm)) return false;
+  if (isFormaSintezaLine(norm)) return false;
+  if (isFormaAcasaLine(norm)) return false;
+  if (isFormaDeplaclareLine(norm)) return false;
+  if (norm === 'general') return false;
   return true;
+}
+
+// ===== FORM RESULT DETECTION =====
+const FORM_MAP: Record<string, 'W' | 'D' | 'L'> = {
+  'v': 'W', 'w': 'W', 'victorie': 'W',
+  'e': 'D', 'd': 'D', 'egal': 'D',
+  'i': 'L', 'l': 'L', 'infrangere': 'L',
+};
+
+function isFormResult(token: string): boolean {
+  return token.toLowerCase() in FORM_MAP;
+}
+
+function toFormResult(token: string): 'W' | 'D' | 'L' {
+  return FORM_MAP[token.toLowerCase()] || 'L';
+}
+
+function extractFormResults(lines: string[], startIndex: number, maxCount: number): { results: ('W' | 'D' | 'L')[]; consumed: number } {
+  const results: ('W' | 'D' | 'L')[] = [];
+  let consumed = 0;
+  let idx = startIndex;
+
+  while (idx < lines.length && results.length < maxCount) {
+    const line = lines[idx].trim();
+    // Try inline: "W L L W L" or "V E I V I"
+    const tokens = line.split(/[\s,;]+/).filter(t => t.length > 0);
+    let foundAny = false;
+    for (const token of tokens) {
+      const clean = removeDiacritics(token.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+      if (clean && isFormResult(clean) && results.length < maxCount) {
+        results.push(toFormResult(clean));
+        foundAny = true;
+      }
+    }
+    if (foundAny) {
+      consumed++;
+      idx++;
+      continue;
+    }
+    // If line is not a form result and we already have some, stop
+    if (results.length > 0) break;
+    // If line has numbers or is noise, skip it but keep looking
+    if (isNumber(line) || line.length === 0) {
+      consumed++;
+      idx++;
+      continue;
+    }
+    // Not a form result line — stop
+    break;
+  }
+  return { results, consumed };
+}
+
+// ===== FORM HEADER DETECTION =====
+function isFormHeader(normalized: string): boolean {
+  return normalized.includes('mj') && (normalized.includes('v') || normalized.includes('e'));
+}
+
+function isFormaSintezaLine(normalized: string): boolean {
+  return normalized.startsWith('sintez') || normalized === 'general' || 
+         normalized.startsWith('forma ultimele') || normalized.startsWith('forma general');
+}
+
+function isFormaAcasaLine(normalized: string): boolean {
+  return normalized === 'acasa' || normalized.startsWith('acasa ') || normalized.startsWith('forma acasa');
+}
+
+function isFormaDeplaclareLine(normalized: string): boolean {
+  return normalized === 'deplasare' || normalized.startsWith('deplasare ') || normalized.startsWith('forma deplasare');
 }
 
 // ===== NOISE FILTER =====
 const NOISE_PATTERNS = [
   'top statistici', 'total', 'ultimele 5', 'ppm',
   'statistici cheie', 'rezumat', 'clasament', 'forma echipei',
-  'general',
 ];
 
 function isNoiseLine(normalized: string): boolean {
@@ -199,6 +272,12 @@ export interface ParsedMatchStats {
   team1Away?: TeamHomeAway;
   team2Home?: TeamHomeAway;
   team2Away?: TeamHomeAway;
+  team1FormGeneral?: ('W' | 'D' | 'L')[];
+  team1FormHome?: ('W' | 'D' | 'L')[];
+  team1FormAway?: ('W' | 'D' | 'L')[];
+  team2FormGeneral?: ('W' | 'D' | 'L')[];
+  team2FormHome?: ('W' | 'D' | 'L')[];
+  team2FormAway?: ('W' | 'D' | 'L')[];
   debugLog: string[];
 }
 
@@ -247,8 +326,138 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
   while (i < lines.length) {
     const norm = normalize(lines[i]);
 
-    // Skip pure noise
-    if (isNoiseLine(norm)) { i++; continue; }
+    // Skip pure noise (but not 'general' which may be form context)
+    if (isNoiseLine(norm) && !isFormaSintezaLine(norm)) { i++; continue; }
+
+    // FORM HEADER: "MJ V E Î Ultimele 5 PPM" → activate form parsing mode
+    if (isFormHeader(norm)) {
+      log(`📋 Form header detected: "${lines[i]}" → form mode`);
+      i++;
+      continue;
+    }
+
+    // FORM PARSING: Sinteza/General form — only if next lines contain form results (V/E/Î/W/D/L)
+    if (isFormaSintezaLine(norm)) {
+      // Check for inline form results on same line: "Forma ultimele cinci meciuri general W L L W L"
+      const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
+        const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+        return isFormResult(c);
+      });
+      
+      let formResults: ('W' | 'D' | 'L')[] = [];
+      let consumed = 0;
+      
+      if (inlineTokens.length >= 3) {
+        formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
+      } else {
+        // Peek ahead: are the next lines form results or numbers?
+        const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
+        if (results.length > 0) {
+          formResults = results;
+          consumed = c;
+        }
+      }
+      
+      if (formResults.length > 0) {
+        if (currentTeamBlock === 2) {
+          if (!result.team2FormGeneral) {
+            result.team2FormGeneral = formResults;
+            log(`📝 Forma General Team 2: ${formResults.join(' ')}`);
+          }
+        } else {
+          if (!result.team1FormGeneral) {
+            result.team1FormGeneral = formResults;
+            log(`📝 Forma General Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormGeneral) {
+            result.team2FormGeneral = formResults;
+            log(`📝 Forma General Team 2: ${formResults.join(' ')}`);
+          }
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      // No form results found → fall through to GM/GP Sinteza handler below
+    }
+
+    // FORM PARSING: Acasa form (must check BEFORE GM/GP acasa)
+    if (isFormaAcasaLine(norm) && !extractNumbersFromLine(lines[i]).length) {
+      const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
+        const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+        return isFormResult(c);
+      });
+      
+      let formResults: ('W' | 'D' | 'L')[] = [];
+      let consumed = 0;
+      
+      if (inlineTokens.length >= 3) {
+        formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
+      } else {
+        const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
+        formResults = results;
+        consumed = c;
+      }
+      
+      if (formResults.length > 0) {
+        if (currentTeamBlock === 2) {
+          if (!result.team2FormHome) {
+            result.team2FormHome = formResults;
+            log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`);
+          }
+        } else {
+          if (!result.team1FormHome) {
+            result.team1FormHome = formResults;
+            log(`📝 Forma Acasa Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormHome) {
+            result.team2FormHome = formResults;
+            log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`);
+          }
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      i++;
+      continue;
+    }
+
+    // FORM PARSING: Deplasare form (must check BEFORE GM/GP deplasare)
+    if (isFormaDeplaclareLine(norm) && !extractNumbersFromLine(lines[i]).length) {
+      const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
+        const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+        return isFormResult(c);
+      });
+      
+      let formResults: ('W' | 'D' | 'L')[] = [];
+      let consumed = 0;
+      
+      if (inlineTokens.length >= 3) {
+        formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
+      } else {
+        const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
+        formResults = results;
+        consumed = c;
+      }
+      
+      if (formResults.length > 0) {
+        if (currentTeamBlock === 2) {
+          if (!result.team2FormAway) {
+            result.team2FormAway = formResults;
+            log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`);
+          }
+        } else {
+          if (!result.team1FormAway) {
+            result.team1FormAway = formResults;
+            log(`📝 Forma Deplasare Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormAway) {
+            result.team2FormAway = formResults;
+            log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`);
+          }
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      i++;
+      continue;
+    }
 
     // Detect team name repetition → new block
     if (isTeamName(lines[i])) {
@@ -492,7 +701,38 @@ export function applyParsedStats(
     log.push(`✈️ Deplasare → Away team: GM_deplasare=${parsed.team2Away.scored}, GP_deplasare=${parsed.team2Away.conceded}`);
   }
 
-  // Apply stats by KEY
+  // Apply Form data
+  if (parsed.team1FormGeneral) {
+    updated.homeTeam.formLast5 = parsed.team1FormGeneral;
+    fieldsFound++;
+    log.push(`📝 Forma General → Home: ${parsed.team1FormGeneral.join(' ')}`);
+  }
+  if (parsed.team1FormHome) {
+    updated.homeTeam.formHome = parsed.team1FormHome;
+    fieldsFound++;
+    log.push(`📝 Forma Acasa → Home: ${parsed.team1FormHome.join(' ')}`);
+  }
+  if (parsed.team1FormAway) {
+    updated.homeTeam.formAway = parsed.team1FormAway;
+    fieldsFound++;
+    log.push(`📝 Forma Deplasare → Home: ${parsed.team1FormAway.join(' ')}`);
+  }
+  if (parsed.team2FormGeneral) {
+    updated.awayTeam.formLast5 = parsed.team2FormGeneral;
+    fieldsFound++;
+    log.push(`📝 Forma General → Away: ${parsed.team2FormGeneral.join(' ')}`);
+  }
+  if (parsed.team2FormHome) {
+    updated.awayTeam.formHome = parsed.team2FormHome;
+    fieldsFound++;
+    log.push(`📝 Forma Acasa → Away: ${parsed.team2FormHome.join(' ')}`);
+  }
+  if (parsed.team2FormAway) {
+    updated.awayTeam.formAway = parsed.team2FormAway;
+    fieldsFound++;
+    log.push(`📝 Forma Deplasare → Away: ${parsed.team2FormAway.join(' ')}`);
+  }
+
   for (const [statKey, pair] of Object.entries(parsed.stats)) {
     const fieldName = STAT_TO_FIELD[statKey];
     if (fieldName && fieldName in updated.homeTeam) {
