@@ -452,44 +452,44 @@ export function applyParsedStats(
     fieldsFound++;
   }
 
-  // Apply GM/GP (Sinteza)
+  // Apply GM/GP (Sinteza) — scored=GM, conceded=GP
   if (parsed.team1GmGp) {
     updated.homeTeam.goalsScored = parsed.team1GmGp.scored;
     updated.homeTeam.goalsConceded = parsed.team1GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 GM/GP → Home: ${parsed.team1GmGp.scored} / ${parsed.team1GmGp.conceded} (avg ${parsed.team1GmGp.average})`);
+    log.push(`📊 Sinteza → Home: GM=${parsed.team1GmGp.scored}, GP=${parsed.team1GmGp.conceded} (Medie=${parsed.team1GmGp.average})`);
   }
   if (parsed.team2GmGp) {
     updated.awayTeam.goalsScored = parsed.team2GmGp.scored;
     updated.awayTeam.goalsConceded = parsed.team2GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 GM/GP → Away: ${parsed.team2GmGp.scored} / ${parsed.team2GmGp.conceded} (avg ${parsed.team2GmGp.average})`);
+    log.push(`📊 Sinteza → Away: GM=${parsed.team2GmGp.scored}, GP=${parsed.team2GmGp.conceded} (Medie=${parsed.team2GmGp.average})`);
   }
 
-  // Apply Home/Away
+  // Apply Home/Away — scored=GM, conceded=GP
   if (parsed.team1Home) {
     updated.homeTeam.goalsScoredHome = parsed.team1Home.scored;
     updated.homeTeam.goalsConcededHome = parsed.team1Home.conceded;
     fieldsFound += 2;
-    log.push(`🏠 Acasa → Home: ${parsed.team1Home.scored} / ${parsed.team1Home.conceded} (total ${parsed.team1Home.total})`);
+    log.push(`🏠 Acasa → Home: GM_acasa=${parsed.team1Home.scored}, GP_acasa=${parsed.team1Home.conceded}`);
   }
   if (parsed.team1Away) {
     updated.homeTeam.goalsScoredAway = parsed.team1Away.scored;
     updated.homeTeam.goalsConcededAway = parsed.team1Away.conceded;
     fieldsFound += 2;
-    log.push(`✈️ Deplasare → Home team away: ${parsed.team1Away.scored} / ${parsed.team1Away.conceded}`);
+    log.push(`✈️ Deplasare → Home team: GM_deplasare=${parsed.team1Away.scored}, GP_deplasare=${parsed.team1Away.conceded}`);
   }
   if (parsed.team2Home) {
     updated.awayTeam.goalsScoredHome = parsed.team2Home.scored;
     updated.awayTeam.goalsConcededHome = parsed.team2Home.conceded;
     fieldsFound += 2;
-    log.push(`🏠 Acasa → Away team home: ${parsed.team2Home.scored} / ${parsed.team2Home.conceded}`);
+    log.push(`🏠 Acasa → Away team: GM_acasa=${parsed.team2Home.scored}, GP_acasa=${parsed.team2Home.conceded}`);
   }
   if (parsed.team2Away) {
     updated.awayTeam.goalsScoredAway = parsed.team2Away.scored;
     updated.awayTeam.goalsConcededAway = parsed.team2Away.conceded;
     fieldsFound += 2;
-    log.push(`✈️ Deplasare → Away team away: ${parsed.team2Away.scored} / ${parsed.team2Away.conceded}`);
+    log.push(`✈️ Deplasare → Away team: GM_deplasare=${parsed.team2Away.scored}, GP_deplasare=${parsed.team2Away.conceded}`);
   }
 
   // Apply stats by KEY
