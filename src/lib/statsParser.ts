@@ -311,12 +311,12 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
 
     // ACASA line: extract 3 inline numbers
+    // VALUE ORDER: val1=GM(goluri marcate acasa), val2=GP(goluri primite acasa), val3=total
     if (isAcasaLine(norm)) {
       const nums = extractNumbersFromLine(lines[i]);
       let homeValues = nums;
       let consumed = 0;
 
-      // If not enough inline, collect from next lines
       if (homeValues.length < 3) {
         const { values, consumed: c } = getNextNumbers(lines, i + 1, 3 - homeValues.length);
         homeValues = [...homeValues, ...values];
@@ -324,16 +324,17 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (homeValues.length >= 3) {
+        // CRITICAL: val1=GM_acasa, val2=GP_acasa, val3=total — NEVER swap
         const ha: TeamHomeAway = { scored: homeValues[0], conceded: homeValues[1], total: homeValues[2] };
         if (currentTeamBlock === 2) {
           result.team2Home = ha;
-          log(`🏠 Acasa Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`🏠 Acasa Team 2: GM_acasa=${ha.scored}, GP_acasa=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team1Home) {
           result.team1Home = ha;
-          log(`🏠 Acasa Team 1: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`🏠 Acasa Team 1: GM_acasa=${ha.scored}, GP_acasa=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team2Home) {
           result.team2Home = ha;
-          log(`🏠 Acasa Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`🏠 Acasa Team 2: GM_acasa=${ha.scored}, GP_acasa=${ha.conceded}, total=${ha.total}`);
         }
         i += 1 + consumed;
         continue;
