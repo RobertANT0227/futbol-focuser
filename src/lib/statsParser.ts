@@ -273,8 +273,8 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
 
     // SINTEZA / SINTETIZAT: collect next 3 numbers (stacked or inline)
+    // VALUE ORDER: val1=GM (goluri marcate), val2=GP (goluri primite), val3=Medie/total
     if (isSintezaLine(norm)) {
-      // First check if numbers are inline: "Sinteza 1.67"
       const inlineNums = extractNumbersFromLine(lines[i]);
       let gmgpValues: number[] = [];
       let consumed = 0;
@@ -282,7 +282,6 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       if (inlineNums.length >= 3) {
         gmgpValues = inlineNums.slice(0, 3);
       } else {
-        // Start with any inline numbers, then collect remaining from next lines
         gmgpValues = [...inlineNums];
         const remaining = 3 - gmgpValues.length;
         const { values, consumed: c } = getNextNumbers(lines, i + 1, remaining);
@@ -291,16 +290,17 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (gmgpValues.length === 3) {
+        // CRITICAL: val1=GM(scored), val2=GP(conceded), val3=average — NEVER swap
         const gmgp: TeamGmGp = { scored: gmgpValues[0], conceded: gmgpValues[1], average: gmgpValues[2] };
         if (currentTeamBlock === 2) {
           result.team2GmGp = gmgp;
-          log(`📊 Sinteza Team 2: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+          log(`📊 Sinteza Team 2: GM=${gmgpValues[0]}, GP=${gmgpValues[1]}, Medie=${gmgpValues[2]}`);
         } else if (!result.team1GmGp) {
           result.team1GmGp = gmgp;
-          log(`📊 Sinteza Team 1: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+          log(`📊 Sinteza Team 1: GM=${gmgpValues[0]}, GP=${gmgpValues[1]}, Medie=${gmgpValues[2]}`);
         } else if (!result.team2GmGp) {
           result.team2GmGp = gmgp;
-          log(`📊 Sinteza Team 2: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+          log(`📊 Sinteza Team 2: GM=${gmgpValues[0]}, GP=${gmgpValues[1]}, Medie=${gmgpValues[2]}`);
         }
         i += 1 + consumed;
         continue;
