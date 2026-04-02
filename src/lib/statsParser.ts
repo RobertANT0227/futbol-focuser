@@ -50,6 +50,11 @@ function isTeamName(line: string): boolean {
   if (isTableHeader(norm)) return false;
   if (isSintezaLine(norm)) return false;
   if (isAcasaLine(norm) || isDeplaclareLine(norm)) return false;
+  if (isFormHeader(norm)) return false;
+  if (isFormaSintezaLine(norm)) return false;
+  if (isFormaAcasaLine(norm)) return false;
+  if (isFormaDeplaclareLine(norm)) return false;
+  if (norm === 'general') return false;
   return true;
 }
 
