@@ -695,7 +695,38 @@ export function applyParsedStats(
     log.push(`✈️ Deplasare → Away team: GM_deplasare=${parsed.team2Away.scored}, GP_deplasare=${parsed.team2Away.conceded}`);
   }
 
-  // Apply stats by KEY
+  // Apply Form data
+  if (parsed.team1FormGeneral) {
+    updated.homeTeam.formLast5 = parsed.team1FormGeneral;
+    fieldsFound++;
+    log.push(`📝 Forma General → Home: ${parsed.team1FormGeneral.join(' ')}`);
+  }
+  if (parsed.team1FormHome) {
+    updated.homeTeam.formHome = parsed.team1FormHome;
+    fieldsFound++;
+    log.push(`📝 Forma Acasa → Home: ${parsed.team1FormHome.join(' ')}`);
+  }
+  if (parsed.team1FormAway) {
+    updated.homeTeam.formAway = parsed.team1FormAway;
+    fieldsFound++;
+    log.push(`📝 Forma Deplasare → Home: ${parsed.team1FormAway.join(' ')}`);
+  }
+  if (parsed.team2FormGeneral) {
+    updated.awayTeam.formLast5 = parsed.team2FormGeneral;
+    fieldsFound++;
+    log.push(`📝 Forma General → Away: ${parsed.team2FormGeneral.join(' ')}`);
+  }
+  if (parsed.team2FormHome) {
+    updated.awayTeam.formHome = parsed.team2FormHome;
+    fieldsFound++;
+    log.push(`📝 Forma Acasa → Away: ${parsed.team2FormHome.join(' ')}`);
+  }
+  if (parsed.team2FormAway) {
+    updated.awayTeam.formAway = parsed.team2FormAway;
+    fieldsFound++;
+    log.push(`📝 Forma Deplasare → Away: ${parsed.team2FormAway.join(' ')}`);
+  }
+
   for (const [statKey, pair] of Object.entries(parsed.stats)) {
     const fieldName = STAT_TO_FIELD[statKey];
     if (fieldName && fieldName in updated.homeTeam) {
