@@ -273,8 +273,8 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
 
     // SINTEZA / SINTETIZAT: collect next 3 numbers (stacked or inline)
+    // VALUE ORDER: val1=GM (goluri marcate), val2=GP (goluri primite), val3=Medie/total
     if (isSintezaLine(norm)) {
-      // First check if numbers are inline: "Sinteza 1.67"
       const inlineNums = extractNumbersFromLine(lines[i]);
       let gmgpValues: number[] = [];
       let consumed = 0;
@@ -282,7 +282,6 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       if (inlineNums.length >= 3) {
         gmgpValues = inlineNums.slice(0, 3);
       } else {
-        // Start with any inline numbers, then collect remaining from next lines
         gmgpValues = [...inlineNums];
         const remaining = 3 - gmgpValues.length;
         const { values, consumed: c } = getNextNumbers(lines, i + 1, remaining);
@@ -291,16 +290,17 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (gmgpValues.length === 3) {
+        // CRITICAL: val1=GM(scored), val2=GP(conceded), val3=average — NEVER swap
         const gmgp: TeamGmGp = { scored: gmgpValues[0], conceded: gmgpValues[1], average: gmgpValues[2] };
         if (currentTeamBlock === 2) {
           result.team2GmGp = gmgp;
-          log(`📊 Sinteza Team 2: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+          log(`📊 Sinteza Team 2: GM=${gmgpValues[0]}, GP=${gmgpValues[1]}, Medie=${gmgpValues[2]}`);
         } else if (!result.team1GmGp) {
           result.team1GmGp = gmgp;
-          log(`📊 Sinteza Team 1: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+          log(`📊 Sinteza Team 1: GM=${gmgpValues[0]}, GP=${gmgpValues[1]}, Medie=${gmgpValues[2]}`);
         } else if (!result.team2GmGp) {
           result.team2GmGp = gmgp;
-          log(`📊 Sinteza Team 2: scored=${gmgpValues[0]}, conceded=${gmgpValues[1]}, avg=${gmgpValues[2]}`);
+          log(`📊 Sinteza Team 2: GM=${gmgpValues[0]}, GP=${gmgpValues[1]}, Medie=${gmgpValues[2]}`);
         }
         i += 1 + consumed;
         continue;
@@ -311,12 +311,12 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
 
     // ACASA line: extract 3 inline numbers
+    // VALUE ORDER: val1=GM(goluri marcate acasa), val2=GP(goluri primite acasa), val3=total
     if (isAcasaLine(norm)) {
       const nums = extractNumbersFromLine(lines[i]);
       let homeValues = nums;
       let consumed = 0;
 
-      // If not enough inline, collect from next lines
       if (homeValues.length < 3) {
         const { values, consumed: c } = getNextNumbers(lines, i + 1, 3 - homeValues.length);
         homeValues = [...homeValues, ...values];
@@ -324,16 +324,17 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (homeValues.length >= 3) {
+        // CRITICAL: val1=GM_acasa, val2=GP_acasa, val3=total — NEVER swap
         const ha: TeamHomeAway = { scored: homeValues[0], conceded: homeValues[1], total: homeValues[2] };
         if (currentTeamBlock === 2) {
           result.team2Home = ha;
-          log(`🏠 Acasa Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`🏠 Acasa Team 2: GM_acasa=${ha.scored}, GP_acasa=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team1Home) {
           result.team1Home = ha;
-          log(`🏠 Acasa Team 1: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`🏠 Acasa Team 1: GM_acasa=${ha.scored}, GP_acasa=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team2Home) {
           result.team2Home = ha;
-          log(`🏠 Acasa Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`🏠 Acasa Team 2: GM_acasa=${ha.scored}, GP_acasa=${ha.conceded}, total=${ha.total}`);
         }
         i += 1 + consumed;
         continue;
@@ -344,6 +345,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
 
     // DEPLASARE line: extract 3 inline numbers
+    // VALUE ORDER: val1=GM(goluri marcate deplasare), val2=GP(goluri primite deplasare), val3=total
     if (isDeplaclareLine(norm)) {
       const nums = extractNumbersFromLine(lines[i]);
       let awayValues = nums;
@@ -356,16 +358,17 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (awayValues.length >= 3) {
+        // CRITICAL: val1=GM_deplasare, val2=GP_deplasare, val3=total — NEVER swap
         const ha: TeamHomeAway = { scored: awayValues[0], conceded: awayValues[1], total: awayValues[2] };
         if (currentTeamBlock === 2) {
           result.team2Away = ha;
-          log(`✈️ Deplasare Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`✈️ Deplasare Team 2: GM_deplasare=${ha.scored}, GP_deplasare=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team1Away) {
           result.team1Away = ha;
-          log(`✈️ Deplasare Team 1: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`✈️ Deplasare Team 1: GM_deplasare=${ha.scored}, GP_deplasare=${ha.conceded}, total=${ha.total}`);
         } else if (!result.team2Away) {
           result.team2Away = ha;
-          log(`✈️ Deplasare Team 2: scored=${ha.scored}, conceded=${ha.conceded}, total=${ha.total}`);
+          log(`✈️ Deplasare Team 2: GM_deplasare=${ha.scored}, GP_deplasare=${ha.conceded}, total=${ha.total}`);
         }
         i += 1 + consumed;
         continue;
@@ -449,44 +452,44 @@ export function applyParsedStats(
     fieldsFound++;
   }
 
-  // Apply GM/GP (Sinteza)
+  // Apply GM/GP (Sinteza) — scored=GM, conceded=GP
   if (parsed.team1GmGp) {
     updated.homeTeam.goalsScored = parsed.team1GmGp.scored;
     updated.homeTeam.goalsConceded = parsed.team1GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 GM/GP → Home: ${parsed.team1GmGp.scored} / ${parsed.team1GmGp.conceded} (avg ${parsed.team1GmGp.average})`);
+    log.push(`📊 Sinteza → Home: GM=${parsed.team1GmGp.scored}, GP=${parsed.team1GmGp.conceded} (Medie=${parsed.team1GmGp.average})`);
   }
   if (parsed.team2GmGp) {
     updated.awayTeam.goalsScored = parsed.team2GmGp.scored;
     updated.awayTeam.goalsConceded = parsed.team2GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 GM/GP → Away: ${parsed.team2GmGp.scored} / ${parsed.team2GmGp.conceded} (avg ${parsed.team2GmGp.average})`);
+    log.push(`📊 Sinteza → Away: GM=${parsed.team2GmGp.scored}, GP=${parsed.team2GmGp.conceded} (Medie=${parsed.team2GmGp.average})`);
   }
 
-  // Apply Home/Away
+  // Apply Home/Away — scored=GM, conceded=GP
   if (parsed.team1Home) {
     updated.homeTeam.goalsScoredHome = parsed.team1Home.scored;
     updated.homeTeam.goalsConcededHome = parsed.team1Home.conceded;
     fieldsFound += 2;
-    log.push(`🏠 Acasa → Home: ${parsed.team1Home.scored} / ${parsed.team1Home.conceded} (total ${parsed.team1Home.total})`);
+    log.push(`🏠 Acasa → Home: GM_acasa=${parsed.team1Home.scored}, GP_acasa=${parsed.team1Home.conceded}`);
   }
   if (parsed.team1Away) {
     updated.homeTeam.goalsScoredAway = parsed.team1Away.scored;
     updated.homeTeam.goalsConcededAway = parsed.team1Away.conceded;
     fieldsFound += 2;
-    log.push(`✈️ Deplasare → Home team away: ${parsed.team1Away.scored} / ${parsed.team1Away.conceded}`);
+    log.push(`✈️ Deplasare → Home team: GM_deplasare=${parsed.team1Away.scored}, GP_deplasare=${parsed.team1Away.conceded}`);
   }
   if (parsed.team2Home) {
     updated.awayTeam.goalsScoredHome = parsed.team2Home.scored;
     updated.awayTeam.goalsConcededHome = parsed.team2Home.conceded;
     fieldsFound += 2;
-    log.push(`🏠 Acasa → Away team home: ${parsed.team2Home.scored} / ${parsed.team2Home.conceded}`);
+    log.push(`🏠 Acasa → Away team: GM_acasa=${parsed.team2Home.scored}, GP_acasa=${parsed.team2Home.conceded}`);
   }
   if (parsed.team2Away) {
     updated.awayTeam.goalsScoredAway = parsed.team2Away.scored;
     updated.awayTeam.goalsConcededAway = parsed.team2Away.conceded;
     fieldsFound += 2;
-    log.push(`✈️ Deplasare → Away team away: ${parsed.team2Away.scored} / ${parsed.team2Away.conceded}`);
+    log.push(`✈️ Deplasare → Away team: GM_deplasare=${parsed.team2Away.scored}, GP_deplasare=${parsed.team2Away.conceded}`);
   }
 
   // Apply stats by KEY
