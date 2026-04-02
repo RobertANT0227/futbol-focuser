@@ -267,6 +267,12 @@ export interface ParsedMatchStats {
   team1Away?: TeamHomeAway;
   team2Home?: TeamHomeAway;
   team2Away?: TeamHomeAway;
+  team1FormGeneral?: ('W' | 'D' | 'L')[];
+  team1FormHome?: ('W' | 'D' | 'L')[];
+  team1FormAway?: ('W' | 'D' | 'L')[];
+  team2FormGeneral?: ('W' | 'D' | 'L')[];
+  team2FormHome?: ('W' | 'D' | 'L')[];
+  team2FormAway?: ('W' | 'D' | 'L')[];
   debugLog: string[];
 }
 
