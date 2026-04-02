@@ -336,7 +336,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       continue;
     }
 
-    // FORM PARSING: Sinteza/General form
+    // FORM PARSING: Sinteza/General form — only if next lines contain form results (V/E/Î/W/D/L)
     if (isFormaSintezaLine(norm)) {
       // Check for inline form results on same line: "Forma ultimele cinci meciuri general W L L W L"
       const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
@@ -350,10 +350,12 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       if (inlineTokens.length >= 3) {
         formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
       } else {
-        // Also grab any numbers on this line to skip them
+        // Peek ahead: are the next lines form results or numbers?
         const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
-        formResults = results;
-        consumed = c;
+        if (results.length > 0) {
+          formResults = results;
+          consumed = c;
+        }
       }
       
       if (formResults.length > 0) {
@@ -374,8 +376,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
         i += 1 + consumed;
         continue;
       }
-      i++;
-      continue;
+      // No form results found → fall through to GM/GP Sinteza handler below
     }
 
     // FORM PARSING: Acasa form (must check BEFORE GM/GP acasa)
