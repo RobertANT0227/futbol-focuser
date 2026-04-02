@@ -321,8 +321,137 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
   while (i < lines.length) {
     const norm = normalize(lines[i]);
 
-    // Skip pure noise
-    if (isNoiseLine(norm)) { i++; continue; }
+    // Skip pure noise (but not 'general' which may be form context)
+    if (isNoiseLine(norm) && !isFormaSintezaLine(norm)) { i++; continue; }
+
+    // FORM HEADER: "MJ V E Î Ultimele 5 PPM" → activate form parsing mode
+    if (isFormHeader(norm)) {
+      log(`📋 Form header detected: "${lines[i]}" → form mode`);
+      i++;
+      continue;
+    }
+
+    // FORM PARSING: Sinteza/General form
+    if (isFormaSintezaLine(norm)) {
+      // Check for inline form results on same line: "Forma ultimele cinci meciuri general W L L W L"
+      const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
+        const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+        return isFormResult(c);
+      });
+      
+      let formResults: ('W' | 'D' | 'L')[] = [];
+      let consumed = 0;
+      
+      if (inlineTokens.length >= 3) {
+        formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
+      } else {
+        // Also grab any numbers on this line to skip them
+        const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
+        formResults = results;
+        consumed = c;
+      }
+      
+      if (formResults.length > 0) {
+        if (currentTeamBlock === 2) {
+          if (!result.team2FormGeneral) {
+            result.team2FormGeneral = formResults;
+            log(`📝 Forma General Team 2: ${formResults.join(' ')}`);
+          }
+        } else {
+          if (!result.team1FormGeneral) {
+            result.team1FormGeneral = formResults;
+            log(`📝 Forma General Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormGeneral) {
+            result.team2FormGeneral = formResults;
+            log(`📝 Forma General Team 2: ${formResults.join(' ')}`);
+          }
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      i++;
+      continue;
+    }
+
+    // FORM PARSING: Acasa form (must check BEFORE GM/GP acasa)
+    if (isFormaAcasaLine(norm) && !extractNumbersFromLine(lines[i]).length) {
+      const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
+        const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+        return isFormResult(c);
+      });
+      
+      let formResults: ('W' | 'D' | 'L')[] = [];
+      let consumed = 0;
+      
+      if (inlineTokens.length >= 3) {
+        formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
+      } else {
+        const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
+        formResults = results;
+        consumed = c;
+      }
+      
+      if (formResults.length > 0) {
+        if (currentTeamBlock === 2) {
+          if (!result.team2FormHome) {
+            result.team2FormHome = formResults;
+            log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`);
+          }
+        } else {
+          if (!result.team1FormHome) {
+            result.team1FormHome = formResults;
+            log(`📝 Forma Acasa Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormHome) {
+            result.team2FormHome = formResults;
+            log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`);
+          }
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      i++;
+      continue;
+    }
+
+    // FORM PARSING: Deplasare form (must check BEFORE GM/GP deplasare)
+    if (isFormaDeplaclareLine(norm) && !extractNumbersFromLine(lines[i]).length) {
+      const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
+        const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+        return isFormResult(c);
+      });
+      
+      let formResults: ('W' | 'D' | 'L')[] = [];
+      let consumed = 0;
+      
+      if (inlineTokens.length >= 3) {
+        formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
+      } else {
+        const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
+        formResults = results;
+        consumed = c;
+      }
+      
+      if (formResults.length > 0) {
+        if (currentTeamBlock === 2) {
+          if (!result.team2FormAway) {
+            result.team2FormAway = formResults;
+            log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`);
+          }
+        } else {
+          if (!result.team1FormAway) {
+            result.team1FormAway = formResults;
+            log(`📝 Forma Deplasare Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormAway) {
+            result.team2FormAway = formResults;
+            log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`);
+          }
+        }
+        i += 1 + consumed;
+        continue;
+      }
+      i++;
+      continue;
+    }
 
     // Detect team name repetition → new block
     if (isTeamName(lines[i])) {
