@@ -49,7 +49,7 @@ export function PasteImporter({ match, onChange }: Props) {
 
   const handleExtractForm = () => {
     if (!formSection.text.trim()) return;
-    const p = parseMatchStats(formSection.text);
+    const p = parseFormOnly(formSection.text);
     setParsedStats(p);
     const { updated, fieldsFound, log } = applyParsedStats(p, match);
     onChange(updated as MatchData);
