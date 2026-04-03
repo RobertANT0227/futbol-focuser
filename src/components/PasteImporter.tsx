@@ -40,7 +40,7 @@ export function PasteImporter({ match, onChange }: Props) {
 
   const handleExtractGoals = () => {
     if (!goalsSection.text.trim()) return;
-    const p = parseMatchStats(goalsSection.text);
+    const p = parseGoalsOnly(goalsSection.text);
     setParsedStats(p);
     const { updated, fieldsFound, log } = applyParsedStats(p, match);
     onChange(updated as MatchData);
