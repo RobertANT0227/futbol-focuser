@@ -31,7 +31,7 @@ export function PasteImporter({ match, onChange }: Props) {
 
   const handleExtractStats = () => {
     if (!statsSection.text.trim()) return;
-    const p = parseMatchStats(statsSection.text);
+    const p = parseStatsOnly(statsSection.text);
     setParsedStats(p);
     const { updated, fieldsFound, log } = applyParsedStats(p, match);
     onChange(updated as MatchData);
