@@ -1,7 +1,7 @@
 /**
- * Strict deterministic football stats parser v5.
- * 4 sections: Statistics, Goals (GM/GP), Form, Odds
+ * Strict deterministic football stats parser v4.
  * No AI guessing — pure sequential logic with text normalization.
+ * Features: team detection, table-mode GM/GP, Sinteza/Acasa/Deplasare, strict key lock.
  */
 
 // ===== TEXT NORMALIZATION =====
@@ -31,6 +31,7 @@ function toNumber(line: string): number {
   return parseFloat(line.replace(/%/g, '').replace(/,/g, '.').trim());
 }
 
+// ===== EXTRACT ALL NUMBERS FROM A LINE =====
 function extractNumbersFromLine(line: string): number[] {
   const cleaned = line.replace(/,/g, '.').replace(/%/g, '');
   const matches = cleaned.match(/-?\d+\.?\d*/g);
@@ -79,6 +80,7 @@ function extractFormResults(lines: string[], startIndex: number, maxCount: numbe
 
   while (idx < lines.length && results.length < maxCount) {
     const line = lines[idx].trim();
+    // Try inline: "W L L W L" or "V E I V I"
     const tokens = line.split(/[\s,;]+/).filter(t => t.length > 0);
     let foundAny = false;
     for (const token of tokens) {
@@ -93,12 +95,15 @@ function extractFormResults(lines: string[], startIndex: number, maxCount: numbe
       idx++;
       continue;
     }
+    // If line is not a form result and we already have some, stop
     if (results.length > 0) break;
+    // If line has numbers or is noise, skip it but keep looking
     if (isNumber(line) || line.length === 0) {
       consumed++;
       idx++;
       continue;
     }
+    // Not a form result line — stop
     break;
   }
   return { results, consumed };
@@ -110,7 +115,7 @@ function isFormHeader(normalized: string): boolean {
 }
 
 function isFormaSintezaLine(normalized: string): boolean {
-  return normalized.startsWith('sintez') || normalized === 'general' ||
+  return normalized.startsWith('sintez') || normalized === 'general' || 
          normalized.startsWith('forma ultimele') || normalized.startsWith('forma general');
 }
 
@@ -129,6 +134,7 @@ const NOISE_PATTERNS = [
 ];
 
 function isNoiseLine(normalized: string): boolean {
+  // Also treat pure "/meci" as noise
   if (normalized === '/meci' || normalized === 'meci') return true;
   return NOISE_PATTERNS.some(p => normalized === p || normalized.startsWith(p + ' '));
 }
@@ -140,10 +146,12 @@ function isTableHeader(normalized: string): boolean {
          (normalized.includes('gp') && normalized.includes('medie'));
 }
 
+// ===== SINTEZA / SINTETIZAT DETECTION =====
 function isSintezaLine(normalized: string): boolean {
   return normalized.startsWith('sintez') || normalized.startsWith('sintetizat');
 }
 
+// ===== ACASA / DEPLASARE DETECTION =====
 function isAcasaLine(normalized: string): boolean {
   return normalized === 'acasa' || normalized.startsWith('acasa ');
 }
@@ -152,7 +160,7 @@ function isDeplaclareLine(normalized: string): boolean {
   return normalized === 'deplasare' || normalized.startsWith('deplasare ');
 }
 
-// ===== STRICT STAT MAPPING =====
+// ===== STRICT STAT MAPPING (priority order: most specific first) =====
 const STAT_MATCHERS: { pattern: string; key: string; exact?: boolean }[] = [
   { pattern: 'suturi pe poarta', key: 'shots_on_target' },
   { pattern: 'shots on target', key: 'shots_on_target' },
@@ -201,6 +209,7 @@ function matchStat(normalizedLine: string): string | null {
   return null;
 }
 
+// ===== STAT TO FIELD MAPPING =====
 const STAT_TO_FIELD: Record<string, string> = {
   'goals': 'goalsScored',
   'possession': 'possession',
@@ -216,11 +225,13 @@ const STAT_TO_FIELD: Record<string, string> = {
   'offsides': 'offsides',
 };
 
+// ===== SAFE NUMBER COLLECTOR (scan forward, skip text, collect N numbers) =====
 function getNextNumbers(lines: string[], startIndex: number, count: number): { values: number[]; consumed: number } {
   const values: number[] = [];
   let consumed = 0;
   let idx = startIndex;
   while (idx < lines.length && values.length < count) {
+    // Extract numbers from line (could be inline or standalone)
     const lineNums = extractNumbersFromLine(lines[idx]);
     if (lineNums.length > 0) {
       for (const n of lineNums) {
@@ -251,17 +262,6 @@ export interface TeamHomeAway {
   total: number;
 }
 
-export interface ParsedOdds {
-  home?: number;
-  draw?: number;
-  away?: number;
-  overUnderLines: { line: number; over: number; under: number }[];
-  bttsYes?: number;
-  bttsNo?: number;
-  cornerLines: { line: number; under: number; over: number }[];
-  debugLog: string[];
-}
-
 export interface ParsedMatchStats {
   team1: string;
   team2: string;
@@ -281,146 +281,7 @@ export interface ParsedMatchStats {
   debugLog: string[];
 }
 
-// ===== ODDS PARSER =====
-export function parseOdds(rawText: string): ParsedOdds {
-  const lines = rawText
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0);
-
-  const result: ParsedOdds = {
-    overUnderLines: [],
-    cornerLines: [],
-    debugLog: [],
-  };
-
-  const log = (msg: string) => result.debugLog.push(msg);
-
-  let i = 0;
-  let section: 'none' | '1x2' | 'goals' | 'btts' | 'corners' = 'none';
-
-  while (i < lines.length) {
-    const norm = normalize(lines[i]);
-
-    // Section detection
-    if (norm === 'final' || norm === '1x2' || norm === 'rezultat final') {
-      section = '1x2';
-      log(`📋 Section: 1X2`);
-      i++;
-      continue;
-    }
-
-    if (norm.includes('sub') && norm.includes('peste') || norm === 'goluri' || norm === 'total goluri' || norm === 'over/under' || norm === 'peste/sub') {
-      section = 'goals';
-      log(`📋 Section: Over/Under Goals`);
-      i++;
-      continue;
-    }
-
-    if (norm === 'gg' || norm === 'btts' || norm.includes('ambele echipe') || norm.includes('gg/ng')) {
-      section = 'btts';
-      log(`📋 Section: BTTS`);
-      i++;
-      continue;
-    }
-
-    if (norm.includes('cornere') || norm.includes('corners') || norm.includes('corner')) {
-      section = 'corners';
-      log(`📋 Section: Corners`);
-      i++;
-      continue;
-    }
-
-    // 1X2 parsing: "1 4.55" or "X 4.00" or "2 1.75"
-    if (section === '1x2' || section === 'none') {
-      const match1x2 = lines[i].match(/^\s*(1|x|X|2)\s+([\d.,]+)\s*$/);
-      if (match1x2) {
-        const label = match1x2[1].toUpperCase();
-        const value = toNumber(match1x2[2]);
-        if (label === '1') { result.home = value; log(`✅ Cota 1 (Home): ${value}`); }
-        if (label === 'X') { result.draw = value; log(`✅ Cota X (Draw): ${value}`); }
-        if (label === '2') { result.away = value; log(`✅ Cota 2 (Away): ${value}`); }
-        section = '1x2';
-        i++;
-        continue;
-      }
-    }
-
-    // Over/Under goals parsing: "2.5 → 2.17 / 1.70" or "2.5 2.17 1.70"
-    // Also handle "0.5 → 13.00 / 1.04" format
-    if (section === 'goals' || section === 'none') {
-      const nums = extractNumbersFromLine(lines[i]);
-      // Pattern: line_value over_odds under_odds (3 numbers on one line)
-      // But also: "line_value → over / under" where first=SUB(under), second=PESTE(over)
-      // RULE: For goal lines the standard is first=OVER, second=UNDER
-      // But user says "SUB = UNDER, PESTE = OVER" and format "0.5 → 13.00 / 1.04"
-      // where first number after line = SUB(under), second = PESTE(over)
-      // Actually re-reading: the format shows "0.5 → 13.00 / 1.04" which is sub/peste = under/over
-      // So: first value = UNDER odds, second value = OVER odds? 
-      // NO — re-reading again: the labels say "SUB / PESTE" so first=SUB=UNDER, second=PESTE=OVER
-      // But wait, for standard Over 2.5 odds, 2.17 is usually over and 1.70 is under
-      // Let me check: "2.5 → 2.17 / 1.70" — if over2.5 is 2.17 and under2.5 is 1.70, that's standard
-      // The user's header says "SUB / PESTE" which would mean first=under, second=over
-      // But the example "2.5 → 2.17 / 1.70" with 2.17 as under would be weird
-      // I'll follow the user's explicit rule: first value = SUB = UNDER, second = PESTE = OVER
-      // Actually wait — looking at the user's example more carefully:
-      // "0.5 → 13.00 / 1.04" — under 0.5 goals at 13.00 makes no sense. Over 0.5 at 1.04 makes sense.
-      // So 13.00 = SUB(under) 0.5, 1.04 = PESTE(over) 0.5. That checks out.
-      // "2.5 → 2.17 / 1.70" — under 2.5 at 2.17, over 2.5 at 1.70. Hmm, that would mean over is favorite.
-      // Actually that depends on the match. Let me just follow the rule: first=SUB=UNDER, second=PESTE=OVER
-      if (nums.length === 3 && nums[0] % 0.5 === 0 && nums[0] <= 6) {
-        const line = nums[0];
-        const under = nums[1]; // SUB = UNDER (first value)
-        const over = nums[2];  // PESTE = OVER (second value)
-        result.overUnderLines.push({ line, over, under });
-        log(`✅ Goals: Line ${line} → Under=${under}, Over=${over}`);
-        section = 'goals';
-        i++;
-        continue;
-      }
-    }
-
-    // BTTS parsing: "Da 1.69" or "Nu 2.17"
-    if (section === 'btts' || section === 'none') {
-      const bttsMatch = lines[i].match(/^\s*(da|nu|yes|no|gg|ng)\s+([\d.,]+)\s*$/i);
-      if (bttsMatch) {
-        const label = normalize(bttsMatch[1]);
-        const value = toNumber(bttsMatch[2]);
-        if (label === 'da' || label === 'yes' || label === 'gg') {
-          result.bttsYes = value;
-          log(`✅ BTTS Da (GG): ${value}`);
-        } else {
-          result.bttsNo = value;
-          log(`✅ BTTS Nu (NG): ${value}`);
-        }
-        section = 'btts';
-        i++;
-        continue;
-      }
-    }
-
-    // Corner lines: "10.5 1.56 2.32" → RULE: first=UNDER, second=OVER
-    if (section === 'corners') {
-      const nums = extractNumbersFromLine(lines[i]);
-      if (nums.length === 3 && nums[0] % 0.5 === 0 && nums[0] >= 5 && nums[0] <= 15) {
-        const line = nums[0];
-        const under = nums[1]; // First value = UNDER
-        const over = nums[2];  // Second value = OVER
-        result.cornerLines.push({ line, under, over });
-        log(`✅ Corners: Line ${line} → Under=${under}, Over=${over}`);
-        i++;
-        continue;
-      }
-    }
-
-    i++;
-  }
-
-  return result;
-}
-
-// ===== MAIN STATS PARSER =====
+// ===== MAIN PARSER =====
 export function parseMatchStats(rawText: string): ParsedMatchStats {
   const lines = rawText
     .replace(/\r\n/g, '\n')
@@ -439,6 +300,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
 
   const log = (msg: string) => result.debugLog.push(msg);
 
+  // STEP 1: Detect team names
   let teamNamesFound = 0;
   let dataStartIndex = 0;
 
@@ -456,111 +318,148 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
     }
   }
 
-  let currentTeamBlock = 0;
+  // STEP 2: Parse stats sequentially
+  let currentTeamBlock = 0; // 0=shared, 1=team1, 2=team2
   let tableMode = false;
   let i = dataStartIndex;
 
   while (i < lines.length) {
     const norm = normalize(lines[i]);
 
+    // Skip pure noise (but not 'general' which may be form context)
     if (isNoiseLine(norm) && !isFormaSintezaLine(norm)) { i++; continue; }
 
+    // FORM HEADER: "MJ V E Î Ultimele 5 PPM" → activate form parsing mode
     if (isFormHeader(norm)) {
       log(`📋 Form header detected: "${lines[i]}" → form mode`);
       i++;
       continue;
     }
 
-    // FORM: Sinteza/General
+    // FORM PARSING: Sinteza/General form — only if next lines contain form results (V/E/Î/W/D/L)
     if (isFormaSintezaLine(norm)) {
+      // Check for inline form results on same line: "Forma ultimele cinci meciuri general W L L W L"
       const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
         const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
         return isFormResult(c);
       });
-
+      
       let formResults: ('W' | 'D' | 'L')[] = [];
       let consumed = 0;
-
+      
       if (inlineTokens.length >= 3) {
         formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
       } else {
+        // Peek ahead: are the next lines form results or numbers?
         const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
-        if (results.length > 0) { formResults = results; consumed = c; }
+        if (results.length > 0) {
+          formResults = results;
+          consumed = c;
+        }
       }
-
+      
       if (formResults.length > 0) {
         if (currentTeamBlock === 2) {
-          if (!result.team2FormGeneral) { result.team2FormGeneral = formResults; log(`📝 Forma General Team 2: ${formResults.join(' ')}`); }
+          if (!result.team2FormGeneral) {
+            result.team2FormGeneral = formResults;
+            log(`📝 Forma General Team 2: ${formResults.join(' ')}`);
+          }
         } else {
-          if (!result.team1FormGeneral) { result.team1FormGeneral = formResults; log(`📝 Forma General Team 1: ${formResults.join(' ')}`); }
-          else if (!result.team2FormGeneral) { result.team2FormGeneral = formResults; log(`📝 Forma General Team 2: ${formResults.join(' ')}`); }
+          if (!result.team1FormGeneral) {
+            result.team1FormGeneral = formResults;
+            log(`📝 Forma General Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormGeneral) {
+            result.team2FormGeneral = formResults;
+            log(`📝 Forma General Team 2: ${formResults.join(' ')}`);
+          }
         }
         i += 1 + consumed;
         continue;
       }
+      // No form results found → fall through to GM/GP Sinteza handler below
     }
 
-    // FORM: Acasa
+    // FORM PARSING: Acasa form (must check BEFORE GM/GP acasa)
     if (isFormaAcasaLine(norm) && !extractNumbersFromLine(lines[i]).length) {
       const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
         const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
         return isFormResult(c);
       });
-
+      
       let formResults: ('W' | 'D' | 'L')[] = [];
       let consumed = 0;
-
+      
       if (inlineTokens.length >= 3) {
         formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
       } else {
         const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
-        formResults = results; consumed = c;
+        formResults = results;
+        consumed = c;
       }
-
+      
       if (formResults.length > 0) {
         if (currentTeamBlock === 2) {
-          if (!result.team2FormHome) { result.team2FormHome = formResults; log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`); }
+          if (!result.team2FormHome) {
+            result.team2FormHome = formResults;
+            log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`);
+          }
         } else {
-          if (!result.team1FormHome) { result.team1FormHome = formResults; log(`📝 Forma Acasa Team 1: ${formResults.join(' ')}`); }
-          else if (!result.team2FormHome) { result.team2FormHome = formResults; log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`); }
+          if (!result.team1FormHome) {
+            result.team1FormHome = formResults;
+            log(`📝 Forma Acasa Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormHome) {
+            result.team2FormHome = formResults;
+            log(`📝 Forma Acasa Team 2: ${formResults.join(' ')}`);
+          }
         }
         i += 1 + consumed;
         continue;
       }
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // FORM: Deplasare
+    // FORM PARSING: Deplasare form (must check BEFORE GM/GP deplasare)
     if (isFormaDeplaclareLine(norm) && !extractNumbersFromLine(lines[i]).length) {
       const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
         const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
         return isFormResult(c);
       });
-
+      
       let formResults: ('W' | 'D' | 'L')[] = [];
       let consumed = 0;
-
+      
       if (inlineTokens.length >= 3) {
         formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
       } else {
         const { results, consumed: c } = extractFormResults(lines, i + 1, 5);
-        formResults = results; consumed = c;
+        formResults = results;
+        consumed = c;
       }
-
+      
       if (formResults.length > 0) {
         if (currentTeamBlock === 2) {
-          if (!result.team2FormAway) { result.team2FormAway = formResults; log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`); }
+          if (!result.team2FormAway) {
+            result.team2FormAway = formResults;
+            log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`);
+          }
         } else {
-          if (!result.team1FormAway) { result.team1FormAway = formResults; log(`📝 Forma Deplasare Team 1: ${formResults.join(' ')}`); }
-          else if (!result.team2FormAway) { result.team2FormAway = formResults; log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`); }
+          if (!result.team1FormAway) {
+            result.team1FormAway = formResults;
+            log(`📝 Forma Deplasare Team 1: ${formResults.join(' ')}`);
+          } else if (!result.team2FormAway) {
+            result.team2FormAway = formResults;
+            log(`📝 Forma Deplasare Team 2: ${formResults.join(' ')}`);
+          }
         }
         i += 1 + consumed;
         continue;
       }
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // Team name repetition → block switch
+    // Detect team name repetition → new block
     if (isTeamName(lines[i])) {
       const nameNorm = normalize(lines[i]);
       if (result.team1 && normalize(result.team1) === nameNorm) {
@@ -570,17 +469,20 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
         currentTeamBlock = 2;
         log(`🔄 Block switch → Team 2: "${lines[i]}"`);
       }
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // TABLE HEADER
+    // TABLE HEADER: "GM GP Medie" → activate table mode
     if (isTableHeader(norm)) {
       tableMode = true;
       log(`📋 Table header detected: "${lines[i]}" → table mode ON`);
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // SINTEZA: val1=GM, val2=GP, val3=Medie
+    // SINTEZA / SINTETIZAT: collect next 3 numbers (stacked or inline)
+    // VALUE ORDER: val1=GM (goluri marcate), val2=GP (goluri primite), val3=Medie/total
     if (isSintezaLine(norm)) {
       const inlineNums = extractNumbersFromLine(lines[i]);
       let gmgpValues: number[] = [];
@@ -597,6 +499,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (gmgpValues.length === 3) {
+        // CRITICAL: val1=GM(scored), val2=GP(conceded), val3=average — NEVER swap
         const gmgp: TeamGmGp = { scored: gmgpValues[0], conceded: gmgpValues[1], average: gmgpValues[2] };
         if (currentTeamBlock === 2) {
           result.team2GmGp = gmgp;
@@ -612,10 +515,12 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
         continue;
       }
       log(`⚠️ Sinteza block invalid (found ${gmgpValues.length}/3 numbers)`);
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // ACASA: val1=GM, val2=GP, val3=total
+    // ACASA line: extract 3 inline numbers
+    // VALUE ORDER: val1=GM(goluri marcate acasa), val2=GP(goluri primite acasa), val3=total
     if (isAcasaLine(norm)) {
       const nums = extractNumbersFromLine(lines[i]);
       let homeValues = nums;
@@ -628,6 +533,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (homeValues.length >= 3) {
+        // CRITICAL: val1=GM_acasa, val2=GP_acasa, val3=total — NEVER swap
         const ha: TeamHomeAway = { scored: homeValues[0], conceded: homeValues[1], total: homeValues[2] };
         if (currentTeamBlock === 2) {
           result.team2Home = ha;
@@ -643,10 +549,12 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
         continue;
       }
       log(`⚠️ Acasa line invalid (found ${homeValues.length}/3 numbers)`);
-      i++; continue;
+      i++;
+      continue;
     }
 
-    // DEPLASARE: val1=GM, val2=GP, val3=total
+    // DEPLASARE line: extract 3 inline numbers
+    // VALUE ORDER: val1=GM(goluri marcate deplasare), val2=GP(goluri primite deplasare), val3=total
     if (isDeplaclareLine(norm)) {
       const nums = extractNumbersFromLine(lines[i]);
       let awayValues = nums;
@@ -659,6 +567,7 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
       }
 
       if (awayValues.length >= 3) {
+        // CRITICAL: val1=GM_deplasare, val2=GP_deplasare, val3=total — NEVER swap
         const ha: TeamHomeAway = { scored: awayValues[0], conceded: awayValues[1], total: awayValues[2] };
         if (currentTeamBlock === 2) {
           result.team2Away = ha;
@@ -674,7 +583,8 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
         continue;
       }
       log(`⚠️ Deplasare line invalid (found ${awayValues.length}/3 numbers)`);
-      i++; continue;
+      i++;
+      continue;
     }
 
     // FORMAT A: number → statName → number
@@ -695,7 +605,8 @@ export function parseMatchStats(rawText: string): ParsedMatchStats {
           continue;
         }
       }
-      i++; continue;
+      i++;
+      continue;
     }
 
     // FORMAT B: statName → number → number
@@ -741,55 +652,87 @@ export function applyParsedStats(
   const log: string[] = [...parsed.debugLog];
   let fieldsFound = 0;
 
-  if (parsed.team1) { updated.homeTeam.name = parsed.team1; fieldsFound++; }
-  if (parsed.team2) { updated.awayTeam.name = parsed.team2; fieldsFound++; }
+  if (parsed.team1) {
+    updated.homeTeam.name = parsed.team1;
+    fieldsFound++;
+  }
+  if (parsed.team2) {
+    updated.awayTeam.name = parsed.team2;
+    fieldsFound++;
+  }
 
-  // GM/GP Sinteza
+  // Apply GM/GP (Sinteza) — scored=GM, conceded=GP
   if (parsed.team1GmGp) {
     updated.homeTeam.goalsScored = parsed.team1GmGp.scored;
     updated.homeTeam.goalsConceded = parsed.team1GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 Sinteza → Home: GM=${parsed.team1GmGp.scored}, GP=${parsed.team1GmGp.conceded}`);
+    log.push(`📊 Sinteza → Home: GM=${parsed.team1GmGp.scored}, GP=${parsed.team1GmGp.conceded} (Medie=${parsed.team1GmGp.average})`);
   }
   if (parsed.team2GmGp) {
     updated.awayTeam.goalsScored = parsed.team2GmGp.scored;
     updated.awayTeam.goalsConceded = parsed.team2GmGp.conceded;
     fieldsFound += 2;
-    log.push(`📊 Sinteza → Away: GM=${parsed.team2GmGp.scored}, GP=${parsed.team2GmGp.conceded}`);
+    log.push(`📊 Sinteza → Away: GM=${parsed.team2GmGp.scored}, GP=${parsed.team2GmGp.conceded} (Medie=${parsed.team2GmGp.average})`);
   }
 
-  // Home/Away
+  // Apply Home/Away — scored=GM, conceded=GP
   if (parsed.team1Home) {
     updated.homeTeam.goalsScoredHome = parsed.team1Home.scored;
     updated.homeTeam.goalsConcededHome = parsed.team1Home.conceded;
     fieldsFound += 2;
-    log.push(`🏠 Acasa → Home: GM=${parsed.team1Home.scored}, GP=${parsed.team1Home.conceded}`);
+    log.push(`🏠 Acasa → Home: GM_acasa=${parsed.team1Home.scored}, GP_acasa=${parsed.team1Home.conceded}`);
   }
   if (parsed.team1Away) {
     updated.homeTeam.goalsScoredAway = parsed.team1Away.scored;
     updated.homeTeam.goalsConcededAway = parsed.team1Away.conceded;
     fieldsFound += 2;
+    log.push(`✈️ Deplasare → Home team: GM_deplasare=${parsed.team1Away.scored}, GP_deplasare=${parsed.team1Away.conceded}`);
   }
   if (parsed.team2Home) {
     updated.awayTeam.goalsScoredHome = parsed.team2Home.scored;
     updated.awayTeam.goalsConcededHome = parsed.team2Home.conceded;
     fieldsFound += 2;
+    log.push(`🏠 Acasa → Away team: GM_acasa=${parsed.team2Home.scored}, GP_acasa=${parsed.team2Home.conceded}`);
   }
   if (parsed.team2Away) {
     updated.awayTeam.goalsScoredAway = parsed.team2Away.scored;
     updated.awayTeam.goalsConcededAway = parsed.team2Away.conceded;
     fieldsFound += 2;
+    log.push(`✈️ Deplasare → Away team: GM_deplasare=${parsed.team2Away.scored}, GP_deplasare=${parsed.team2Away.conceded}`);
   }
 
-  // Form
-  if (parsed.team1FormGeneral) { updated.homeTeam.formLast5 = parsed.team1FormGeneral; fieldsFound++; }
-  if (parsed.team1FormHome) { updated.homeTeam.formHome = parsed.team1FormHome; fieldsFound++; }
-  if (parsed.team1FormAway) { updated.homeTeam.formAway = parsed.team1FormAway; fieldsFound++; }
-  if (parsed.team2FormGeneral) { updated.awayTeam.formLast5 = parsed.team2FormGeneral; fieldsFound++; }
-  if (parsed.team2FormHome) { updated.awayTeam.formHome = parsed.team2FormHome; fieldsFound++; }
-  if (parsed.team2FormAway) { updated.awayTeam.formAway = parsed.team2FormAway; fieldsFound++; }
+  // Apply Form data
+  if (parsed.team1FormGeneral) {
+    updated.homeTeam.formLast5 = parsed.team1FormGeneral;
+    fieldsFound++;
+    log.push(`📝 Forma General → Home: ${parsed.team1FormGeneral.join(' ')}`);
+  }
+  if (parsed.team1FormHome) {
+    updated.homeTeam.formHome = parsed.team1FormHome;
+    fieldsFound++;
+    log.push(`📝 Forma Acasa → Home: ${parsed.team1FormHome.join(' ')}`);
+  }
+  if (parsed.team1FormAway) {
+    updated.homeTeam.formAway = parsed.team1FormAway;
+    fieldsFound++;
+    log.push(`📝 Forma Deplasare → Home: ${parsed.team1FormAway.join(' ')}`);
+  }
+  if (parsed.team2FormGeneral) {
+    updated.awayTeam.formLast5 = parsed.team2FormGeneral;
+    fieldsFound++;
+    log.push(`📝 Forma General → Away: ${parsed.team2FormGeneral.join(' ')}`);
+  }
+  if (parsed.team2FormHome) {
+    updated.awayTeam.formHome = parsed.team2FormHome;
+    fieldsFound++;
+    log.push(`📝 Forma Acasa → Away: ${parsed.team2FormHome.join(' ')}`);
+  }
+  if (parsed.team2FormAway) {
+    updated.awayTeam.formAway = parsed.team2FormAway;
+    fieldsFound++;
+    log.push(`📝 Forma Deplasare → Away: ${parsed.team2FormAway.join(' ')}`);
+  }
 
-  // Stats
   for (const [statKey, pair] of Object.entries(parsed.stats)) {
     const fieldName = STAT_TO_FIELD[statKey];
     if (fieldName && fieldName in updated.homeTeam) {
@@ -797,45 +740,9 @@ export function applyParsedStats(
       updated.awayTeam[fieldName] = pair.team2;
       fieldsFound += 2;
       log.push(`📊 ${statKey} → ${fieldName}: ${pair.team1} / ${pair.team2}`);
+    } else {
+      log.push(`⚠️ ${statKey} → ${pair.team1} / ${pair.team2} (unmapped)`);
     }
-  }
-
-  return { updated, fieldsFound, log };
-}
-
-// ===== APPLY PARSED ODDS TO MATCH DATA =====
-export function applyParsedOdds(
-  parsed: ParsedOdds,
-  match: any
-): { updated: any; fieldsFound: number; log: string[] } {
-  const updated = JSON.parse(JSON.stringify(match));
-  const log: string[] = [...parsed.debugLog];
-  let fieldsFound = 0;
-
-  if (parsed.home !== undefined) { updated.oddsHome = parsed.home; fieldsFound++; }
-  if (parsed.draw !== undefined) { updated.oddsDraw = parsed.draw; fieldsFound++; }
-  if (parsed.away !== undefined) { updated.oddsAway = parsed.away; fieldsFound++; }
-  if (parsed.bttsYes !== undefined) { updated.oddsBTTSYes = parsed.bttsYes; fieldsFound++; }
-  if (parsed.bttsNo !== undefined) { updated.oddsBTTSNo = parsed.bttsNo; fieldsFound++; }
-
-  // Find Over 2.5 and Under 2.5 specifically
-  const line25 = parsed.overUnderLines.find(l => l.line === 2.5);
-  if (line25) {
-    updated.oddsOver25 = line25.over;
-    updated.oddsUnder25 = line25.under;
-    fieldsFound += 2;
-    log.push(`📊 Over/Under 2.5 → Over=${line25.over}, Under=${line25.under}`);
-  }
-
-  // Corner lines
-  if (parsed.cornerLines.length > 0) {
-    updated.cornerLines = parsed.cornerLines.map(cl => ({
-      line: cl.line,
-      oddsOver: cl.over,
-      oddsUnder: cl.under,
-    }));
-    fieldsFound += parsed.cornerLines.length;
-    log.push(`⛳ ${parsed.cornerLines.length} corner lines imported`);
   }
 
   return { updated, fieldsFound, log };
