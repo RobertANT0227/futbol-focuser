@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import type { MatchData } from '@/lib/types';
-import { parseStatsOnly, parseGoalsOnly, parseFormOnly, applyParsedStats, parseOdds, applyParsedOdds, type ParsedMatchStats, type ParsedOdds } from '@/lib/statsParser';
+import { parseMatchStats, applyParsedStats, parseOdds, applyParsedOdds, type ParsedMatchStats, type ParsedOdds } from '@/lib/statsParser';
 
 interface Props {
   match: MatchData;
@@ -31,7 +31,7 @@ export function PasteImporter({ match, onChange }: Props) {
 
   const handleExtractStats = () => {
     if (!statsSection.text.trim()) return;
-    const p = parseStatsOnly(statsSection.text);
+    const p = parseMatchStats(statsSection.text);
     setParsedStats(p);
     const { updated, fieldsFound, log } = applyParsedStats(p, match);
     onChange(updated as MatchData);
@@ -40,7 +40,7 @@ export function PasteImporter({ match, onChange }: Props) {
 
   const handleExtractGoals = () => {
     if (!goalsSection.text.trim()) return;
-    const p = parseGoalsOnly(goalsSection.text);
+    const p = parseMatchStats(goalsSection.text);
     setParsedStats(p);
     const { updated, fieldsFound, log } = applyParsedStats(p, match);
     onChange(updated as MatchData);
@@ -49,7 +49,7 @@ export function PasteImporter({ match, onChange }: Props) {
 
   const handleExtractForm = () => {
     if (!formSection.text.trim()) return;
-    const p = parseFormOnly(formSection.text);
+    const p = parseMatchStats(formSection.text);
     setParsedStats(p);
     const { updated, fieldsFound, log } = applyParsedStats(p, match);
     onChange(updated as MatchData);
