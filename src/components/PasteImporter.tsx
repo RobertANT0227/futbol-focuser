@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import type { MatchData } from '@/lib/types';
-import { parseMatchStats, applyParsedStats, parseOdds, applyParsedOdds, type ParsedMatchStats, type ParsedOdds } from '@/lib/statsParser';
+import { parseStatsOnly, parseGoalsOnly, parseFormOnly, applyParsedStats, parseOdds, applyParsedOdds, type ParsedMatchStats, type ParsedOdds } from '@/lib/statsParser';
 
 interface Props {
   match: MatchData;

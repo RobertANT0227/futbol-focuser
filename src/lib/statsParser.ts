@@ -420,7 +420,279 @@ export function parseOdds(rawText: string): ParsedOdds {
   return result;
 }
 
-// ===== MAIN STATS PARSER =====
+// ===== ISOLATED STATS-ONLY PARSER (Section 1) =====
+export function parseStatsOnly(rawText: string): ParsedMatchStats {
+  const lines = rawText
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  const result: ParsedMatchStats = { team1: '', team2: '', stats: {}, debugLog: [] };
+  if (lines.length < 2) return result;
+  const log = (msg: string) => result.debugLog.push(msg);
+
+  let teamNamesFound = 0;
+  let dataStartIndex = 0;
+
+  for (let i = 0; i < lines.length && teamNamesFound < 2; i++) {
+    if (isTeamName(lines[i])) {
+      if (teamNamesFound === 0) { result.team1 = lines[i]; log(`🏠 Team 1: "${lines[i]}"`); }
+      else { result.team2 = lines[i]; log(`✈️ Team 2: "${lines[i]}"`); }
+      teamNamesFound++;
+      dataStartIndex = i + 1;
+    }
+  }
+
+  let i = dataStartIndex;
+  while (i < lines.length) {
+    const norm = normalize(lines[i]);
+    if (isNoiseLine(norm) || isTableHeader(norm) || isSintezaLine(norm) ||
+        isAcasaLine(norm) || isDeplaclareLine(norm) || isFormHeader(norm) ||
+        isFormaSintezaLine(norm) || isFormaAcasaLine(norm) || isFormaDeplaclareLine(norm)) {
+      log(`🚫 IGNORED (not stats): "${lines[i]}"`);
+      i++; continue;
+    }
+
+    // Skip repeated team names
+    if (isTeamName(lines[i])) { i++; continue; }
+
+    // FORMAT A: number → statName → number
+    if (isNumber(lines[i])) {
+      const value1 = toNumber(lines[i]);
+      if (i + 1 < lines.length && !isNumber(lines[i + 1])) {
+        const statKey = matchStat(normalize(lines[i + 1]));
+        if (statKey && i + 2 < lines.length && isNumber(lines[i + 2])) {
+          const value2 = toNumber(lines[i + 2]);
+          if (!(statKey in result.stats)) {
+            result.stats[statKey] = { team1: value1, team2: value2 };
+            log(`✅ ${statKey} → ${value1} / ${value2}`);
+          }
+          i += 3; continue;
+        }
+      }
+      i++; continue;
+    }
+
+    // FORMAT B: statName → number → number
+    const statKey = matchStat(norm);
+    if (statKey) {
+      if (i + 1 < lines.length && isNumber(lines[i + 1])) {
+        const value1 = toNumber(lines[i + 1]);
+        const value2 = (i + 2 < lines.length && isNumber(lines[i + 2])) ? toNumber(lines[i + 2]) : 0;
+        const advance = (i + 2 < lines.length && isNumber(lines[i + 2])) ? 3 : 2;
+        if (!(statKey in result.stats)) {
+          result.stats[statKey] = { team1: value1, team2: value2 };
+          log(`✅ ${statKey} → ${value1} / ${value2}`);
+        }
+        i += advance; continue;
+      }
+    }
+    i++;
+  }
+
+  // Validation
+  if (result.stats['shots_on_target'] && result.stats['shots']) {
+    const sot = result.stats['shots_on_target'];
+    const shots = result.stats['shots'];
+    if (sot.team1 > shots.team1 || sot.team2 > shots.team2) {
+      log(`⚠️ VALIDATION: shots_on_target > shots — flagged`);
+    }
+  }
+
+  return result;
+}
+
+// ===== ISOLATED GOALS-ONLY PARSER (Section 2) =====
+export function parseGoalsOnly(rawText: string): ParsedMatchStats {
+  const lines = rawText
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  const result: ParsedMatchStats = { team1: '', team2: '', stats: {}, debugLog: [] };
+  if (lines.length < 1) return result;
+  const log = (msg: string) => result.debugLog.push(msg);
+
+  let currentTeamBlock = 0;
+
+  // Detect team names
+  for (let i = 0; i < lines.length; i++) {
+    if (isTeamName(lines[i])) {
+      if (!result.team1) { result.team1 = lines[i]; log(`🏠 Team 1: "${lines[i]}"`); }
+      else if (!result.team2 && normalize(lines[i]) !== normalize(result.team1)) {
+        result.team2 = lines[i]; log(`✈️ Team 2: "${lines[i]}"`);
+      }
+    }
+  }
+
+  let i = 0;
+  while (i < lines.length) {
+    const norm = normalize(lines[i]);
+
+    // Team block switch
+    if (isTeamName(lines[i]) && result.team1 && normalize(lines[i]) === normalize(result.team1)) { currentTeamBlock = 1; i++; continue; }
+    if (isTeamName(lines[i]) && result.team2 && normalize(lines[i]) === normalize(result.team2)) { currentTeamBlock = 2; i++; continue; }
+
+    // Table header — skip
+    if (isTableHeader(norm)) { log(`📋 Table header: "${lines[i]}"`); i++; continue; }
+
+    // ONLY parse GM/GP blocks: Sinteza, Acasa, Deplasare
+    if (isSintezaLine(norm)) {
+      const inlineNums = extractNumbersFromLine(lines[i]);
+      let vals: number[] = [];
+      let consumed = 0;
+      if (inlineNums.length >= 3) { vals = inlineNums.slice(0, 3); }
+      else {
+        vals = [...inlineNums];
+        const { values, consumed: c } = getNextNumbers(lines, i + 1, 3 - vals.length);
+        vals.push(...values); consumed = c;
+      }
+      if (vals.length === 3) {
+        const gmgp: TeamGmGp = { scored: vals[0], conceded: vals[1], average: vals[2] };
+        if (currentTeamBlock === 2) { result.team2GmGp = gmgp; }
+        else if (!result.team1GmGp) { result.team1GmGp = gmgp; }
+        else if (!result.team2GmGp) { result.team2GmGp = gmgp; }
+        log(`📊 Sinteza: GM=${vals[0]}, GP=${vals[1]}, Medie=${vals[2]}`);
+        i += 1 + consumed; continue;
+      }
+      i++; continue;
+    }
+
+    if (isAcasaLine(norm)) {
+      const nums = extractNumbersFromLine(lines[i]);
+      let vals = nums;
+      let consumed = 0;
+      if (vals.length < 3) { const r = getNextNumbers(lines, i + 1, 3 - vals.length); vals = [...vals, ...r.values]; consumed = r.consumed; }
+      if (vals.length >= 3) {
+        const ha: TeamHomeAway = { scored: vals[0], conceded: vals[1], total: vals[2] };
+        if (currentTeamBlock === 2) { result.team2Home = ha; }
+        else if (!result.team1Home) { result.team1Home = ha; }
+        else if (!result.team2Home) { result.team2Home = ha; }
+        log(`🏠 Acasa: GM=${vals[0]}, GP=${vals[1]}, total=${vals[2]}`);
+        i += 1 + consumed; continue;
+      }
+      i++; continue;
+    }
+
+    if (isDeplaclareLine(norm)) {
+      const nums = extractNumbersFromLine(lines[i]);
+      let vals = nums;
+      let consumed = 0;
+      if (vals.length < 3) { const r = getNextNumbers(lines, i + 1, 3 - vals.length); vals = [...vals, ...r.values]; consumed = r.consumed; }
+      if (vals.length >= 3) {
+        const ha: TeamHomeAway = { scored: vals[0], conceded: vals[1], total: vals[2] };
+        if (currentTeamBlock === 2) { result.team2Away = ha; }
+        else if (!result.team1Away) { result.team1Away = ha; }
+        else if (!result.team2Away) { result.team2Away = ha; }
+        log(`✈️ Deplasare: GM=${vals[0]}, GP=${vals[1]}, total=${vals[2]}`);
+        i += 1 + consumed; continue;
+      }
+      i++; continue;
+    }
+
+    i++;
+  }
+
+  return result;
+}
+
+// ===== ISOLATED FORM-ONLY PARSER (Section 3) =====
+export function parseFormOnly(rawText: string): ParsedMatchStats {
+  const lines = rawText
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0);
+
+  const result: ParsedMatchStats = { team1: '', team2: '', stats: {}, debugLog: [] };
+  if (lines.length < 1) return result;
+  const log = (msg: string) => result.debugLog.push(msg);
+
+  let currentTeamBlock = 0;
+
+  // Detect team names
+  for (let i = 0; i < lines.length; i++) {
+    if (isTeamName(lines[i])) {
+      if (!result.team1) { result.team1 = lines[i]; log(`🏠 Team 1: "${lines[i]}"`); }
+      else if (!result.team2 && normalize(lines[i]) !== normalize(result.team1)) {
+        result.team2 = lines[i]; log(`✈️ Team 2: "${lines[i]}"`);
+      }
+    }
+  }
+
+  let i = 0;
+  while (i < lines.length) {
+    const norm = normalize(lines[i]);
+
+    // Team block switch
+    if (isTeamName(lines[i]) && result.team1 && normalize(lines[i]) === normalize(result.team1)) { currentTeamBlock = 1; i++; continue; }
+    if (isTeamName(lines[i]) && result.team2 && normalize(lines[i]) === normalize(result.team2)) { currentTeamBlock = 2; i++; continue; }
+
+    // Ignore noise/numbers/headers
+    if (isNoiseLine(norm) || isFormHeader(norm) || isTableHeader(norm)) { i++; continue; }
+
+    // ONLY parse form blocks: Sinteza/General, Acasa, Deplasare
+    const parseFormBlock = (setter: (results: ('W' | 'D' | 'L')[]) => void, label: string) => {
+      const inlineTokens = lines[i].split(/[\s,;]+/).filter(t => {
+        const c = removeDiacritics(t.toLowerCase().replace(/[^a-zA-ZăâîșțĂÂÎȘȚ]/g, ''));
+        return isFormResult(c);
+      });
+      let formResults: ('W' | 'D' | 'L')[] = [];
+      let consumed = 0;
+      if (inlineTokens.length >= 3) {
+        formResults = inlineTokens.slice(0, 5).map(t => toFormResult(removeDiacritics(t.toLowerCase())));
+      } else {
+        const r = extractFormResults(lines, i + 1, 5);
+        formResults = r.results; consumed = r.consumed;
+      }
+      if (formResults.length > 0) {
+        setter(formResults);
+        log(`📝 ${label}: ${formResults.join(' ')}`);
+        i += 1 + consumed;
+        return true;
+      }
+      return false;
+    };
+
+    if (isFormaSintezaLine(norm)) {
+      const done = parseFormBlock((r) => {
+        if (currentTeamBlock === 2) { result.team2FormGeneral = r; }
+        else if (!result.team1FormGeneral) { result.team1FormGeneral = r; }
+        else if (!result.team2FormGeneral) { result.team2FormGeneral = r; }
+      }, 'Forma General');
+      if (done) continue;
+      i++; continue;
+    }
+
+    if (isFormaAcasaLine(norm) && !extractNumbersFromLine(lines[i]).length) {
+      const done = parseFormBlock((r) => {
+        if (currentTeamBlock === 2) { result.team2FormHome = r; }
+        else if (!result.team1FormHome) { result.team1FormHome = r; }
+        else if (!result.team2FormHome) { result.team2FormHome = r; }
+      }, 'Forma Acasa');
+      if (done) continue;
+      i++; continue;
+    }
+
+    if (isFormaDeplaclareLine(norm) && !extractNumbersFromLine(lines[i]).length) {
+      const done = parseFormBlock((r) => {
+        if (currentTeamBlock === 2) { result.team2FormAway = r; }
+        else if (!result.team1FormAway) { result.team1FormAway = r; }
+        else if (!result.team2FormAway) { result.team2FormAway = r; }
+      }, 'Forma Deplasare');
+      if (done) continue;
+      i++; continue;
+    }
+
+    i++;
+  }
+
+  return result;
+}
+
+// ===== MAIN STATS PARSER (legacy, still available) =====
 export function parseMatchStats(rawText: string): ParsedMatchStats {
   const lines = rawText
     .replace(/\r\n/g, '\n')
