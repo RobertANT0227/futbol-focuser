@@ -12,7 +12,6 @@ import { runAnalysis } from '@/lib/engine';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
 const Index = () => {
-  const navigate = useNavigate();
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('unlocked') === '1');
   const [match, setMatch] = useState<MatchData>(defaultMatch());
   const [plan, setPlan] = useState<UserPlan>(defaultPlan);
