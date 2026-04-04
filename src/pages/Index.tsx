@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { Button } from '@/components/ui/button';
 import { MatchInputForm, defaultMatch } from '@/components/MatchInputForm';
 import { PasteImporter } from '@/components/PasteImporter';
@@ -12,7 +12,6 @@ import { runAnalysis } from '@/lib/engine';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
 const Index = () => {
-  const navigate = useNavigate();
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('unlocked') === '1');
   const [match, setMatch] = useState<MatchData>(defaultMatch());
   const [plan, setPlan] = useState<UserPlan>(defaultPlan);
@@ -70,9 +69,6 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => navigate('/bankroll')} className="gap-2">
-              <span>📊</span> Bankroll Manager
-            </Button>
             <HowItWorks steps={result?.analysisSteps} result={result} />
             <div className="text-xs font-mono text-muted-foreground hidden md:block">
               Poisson + Monte Carlo + Kelly
