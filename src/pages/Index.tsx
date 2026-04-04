@@ -70,6 +70,9 @@ const Index = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => navigate('/bankroll')} className="gap-2">
+              <span>📊</span> Bankroll Manager
+            </Button>
             <HowItWorks steps={result?.analysisSteps} result={result} />
             <div className="text-xs font-mono text-muted-foreground hidden md:block">
               Poisson + Monte Carlo + Kelly
