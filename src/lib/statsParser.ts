@@ -156,9 +156,6 @@ function isDeplaclareLine(normalized: string): boolean {
 const STAT_MATCHERS: { pattern: string; key: string; exact?: boolean }[] = [
   { pattern: 'suturi pe poarta', key: 'shots_on_target' },
   { pattern: 'shots on target', key: 'shots_on_target' },
-  { pattern: 'ocazii mari create', key: 'big_chances' },
-  { pattern: 'ocazii mari', key: 'big_chances' },
-  { pattern: 'big chances', key: 'big_chances' },
   { pattern: 'suturi pe meci', key: 'shots' },
   { pattern: 'total suturi', key: 'shots' },
   { pattern: 'suturi totale', key: 'shots' },
