@@ -444,6 +444,13 @@ export function parseStatsOnly(rawText: string): ParsedMatchStats {
   let i = dataStartIndex;
   while (i < lines.length) {
     const norm = normalize(lines[i]);
+
+    // CRITICAL: Skip "ocazii mari" / "big chances" completely
+    if (norm.includes('ocazii') || norm.includes('big chances')) {
+      log(`🚫 FILTERED OUT (removed metric): "${lines[i]}"`);
+      i++; continue;
+    }
+
     if (isNoiseLine(norm) || isTableHeader(norm) || isSintezaLine(norm) ||
         isAcasaLine(norm) || isDeplaclareLine(norm) || isFormHeader(norm) ||
         isFormaSintezaLine(norm) || isFormaAcasaLine(norm) || isFormaDeplaclareLine(norm)) {
