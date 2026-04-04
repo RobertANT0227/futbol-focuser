@@ -203,7 +203,7 @@ const STAT_TO_FIELD: Record<string, string> = {
   'possession': 'possession',
   'shots': 'shots',
   'shots_on_target': 'shotsOnTarget',
-  'big_chances': 'shotsOnTarget',
+  
   'corners': 'cornersPerMatch',
   'fouls': 'fouls',
   'yellow_cards': 'cardsPerMatch',
