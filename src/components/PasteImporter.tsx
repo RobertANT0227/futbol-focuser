@@ -109,7 +109,7 @@ export function PasteImporter({ match, onChange }: Props) {
           {/* === SECTION 1: STATISTICS === */}
           <TabsContent value="stats" className="space-y-2 mt-3">
             <Label className="text-xs text-muted-foreground">
-              Posesie, Total șuturi, Șuturi pe poartă, Ocazii mari, Cornere, Faulturi, Cartonașe
+              Posesie, Total șuturi, Șuturi pe poartă, Cornere, Faulturi, Cartonașe
             </Label>
             <Textarea
               value={statsSection.text}

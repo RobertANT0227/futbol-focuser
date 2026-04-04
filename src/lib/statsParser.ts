@@ -156,9 +156,6 @@ function isDeplaclareLine(normalized: string): boolean {
 const STAT_MATCHERS: { pattern: string; key: string; exact?: boolean }[] = [
   { pattern: 'suturi pe poarta', key: 'shots_on_target' },
   { pattern: 'shots on target', key: 'shots_on_target' },
-  { pattern: 'ocazii mari create', key: 'big_chances' },
-  { pattern: 'ocazii mari', key: 'big_chances' },
-  { pattern: 'big chances', key: 'big_chances' },
   { pattern: 'suturi pe meci', key: 'shots' },
   { pattern: 'total suturi', key: 'shots' },
   { pattern: 'suturi totale', key: 'shots' },
@@ -206,7 +203,7 @@ const STAT_TO_FIELD: Record<string, string> = {
   'possession': 'possession',
   'shots': 'shots',
   'shots_on_target': 'shotsOnTarget',
-  'big_chances': 'shotsOnTarget',
+  
   'corners': 'cornersPerMatch',
   'fouls': 'fouls',
   'yellow_cards': 'cardsPerMatch',
@@ -447,6 +444,13 @@ export function parseStatsOnly(rawText: string): ParsedMatchStats {
   let i = dataStartIndex;
   while (i < lines.length) {
     const norm = normalize(lines[i]);
+
+    // CRITICAL: Skip "ocazii mari" / "big chances" completely
+    if (norm.includes('ocazii') || norm.includes('big chances')) {
+      log(`🚫 FILTERED OUT (removed metric): "${lines[i]}"`);
+      i++; continue;
+    }
+
     if (isNoiseLine(norm) || isTableHeader(norm) || isSintezaLine(norm) ||
         isAcasaLine(norm) || isDeplaclareLine(norm) || isFormHeader(norm) ||
         isFormaSintezaLine(norm) || isFormaAcasaLine(norm) || isFormaDeplaclareLine(norm)) {
