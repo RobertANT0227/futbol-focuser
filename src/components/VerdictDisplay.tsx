@@ -1,4 +1,5 @@
 import type { AnalysisResult, BetRecommendation } from '@/lib/types';
+import { BetCard } from './BetCard';
 
 function pct(n: number): string {
   return (n * 100).toFixed(1) + '%';
@@ -145,14 +146,18 @@ interface Props {
 }
 
 export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
-  const premiumBets = result.recommendations.filter(r => r.winRate >= 76 && r.value > 0);
-  const otherBets = result.recommendations.filter(r => r.winRate < 76 || r.value <= 0);
+  // Sort by EV desc (then WR) — only positive-value bets become "Top Bets"
+  const valueBets = result.recommendations
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.ev - a.ev || b.winRate - a.winRate);
+  const otherBets = result.recommendations.filter((r) => r.value <= 0);
+  const matchLabel = `${homeTeamName} vs ${awayTeamName}`;
 
   return (
     <div className="space-y-6">
       {/* Summary header */}
       <div className="gradient-verdict rounded-xl p-6 border border-border">
-        <h2 className="text-xl font-bold text-gradient-primary mb-4">📊 {homeTeamName} vs {awayTeamName}</h2>
+        <h2 className="text-xl font-bold text-gradient-primary mb-4">📊 {matchLabel}</h2>
         
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center">
@@ -217,42 +222,48 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
         <p className="text-xs text-secondary-foreground leading-relaxed">{result.motivationAnalysis}</p>
       </div>
 
-      {/* BEST BET */}
-      {result.bestBet && (
+      {/* TOP BETS — trader-style cards */}
+      {valueBets.length > 0 && (
         <div>
-          <h2 className="text-lg font-bold text-primary mb-3 flex items-center gap-2">🎯 BEST BET — Selecția #1</h2>
-          <BestBetCard bet={result.bestBet} homeStyle={result.detectedStyles.home} awayStyle={result.detectedStyles.away} />
-        </div>
-      )}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              🔥 Top Bets <span className="text-xs font-normal text-muted-foreground">(sortat după EV)</span>
+            </h2>
+            <span className="text-[10px] font-mono text-muted-foreground">{valueBets.length} selecții</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {valueBets.map((bet, i) => (
+              <BetCard key={`top-${i}`} bet={bet} matchLabel={matchLabel} rank={i + 1} />
+            ))}
+          </div>
 
-      {/* Premium Tips (WR >= 76%) */}
-      {premiumBets.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-2">
-            ⭐ Premium Tips (WR ≥ 76%)
-            <span className="text-xs font-normal text-muted-foreground">— {premiumBets.length} selecții</span>
-          </h3>
-          <div className="space-y-2">
-            {premiumBets.map((bet, i) => (
-              <div key={`prem-${i}`}>
-                <CompactBetRow bet={bet} index={i} />
-                <AIExplanationPanel explanation={bet.aiExplanation} />
+          {/* AI explanation for top pick only */}
+          {valueBets[0] && (
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 mt-4">
+              <div className="flex items-start gap-2">
+                <span className="text-sm mt-0.5">🤖</span>
+                <div className="text-xs text-secondary-foreground leading-relaxed">
+                  <strong className="text-foreground">Top pick — {valueBets[0].selection}:</strong>{' '}
+                  {valueBets[0].aiExplanation}
+                </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Other bets */}
+      {/* Other bets — compact list */}
       {otherBets.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">📋 Alte selecții analizate</h3>
-          <div className="space-y-1">
+        <details className="rounded-lg border border-border bg-card/40 p-3">
+          <summary className="text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer">
+            📋 Alte selecții analizate ({otherBets.length})
+          </summary>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
             {otherBets.map((bet, i) => (
-              <CompactBetRow key={`other-${i}`} bet={bet} index={premiumBets.length + i} />
+              <BetCard key={`other-${i}`} bet={bet} compact />
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       {result.recommendations.length === 0 && (
