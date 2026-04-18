@@ -72,7 +72,41 @@ export function saveBankrollState(state: BankrollState) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export function calculateKelly(winRate: number, odds: number): number {
+// ===== TOP BETS SYNC (analysis -> bankroll manager) =====
+const TOP_BETS_KEY = 'bankroll_top_bets';
+
+export interface SyncedTopBet {
+  matchLabel: string;
+  selection: string;
+  category: 'corners' | 'winner' | 'goals';
+  odds: number;
+  winRate: number;
+  ev: number;
+  value: number;
+  stakeConfidence: ConfidenceLevel;
+  stakePct: number;
+  stakeLei: number;
+  fragile: boolean;
+  risk: 'low' | 'medium' | 'high';
+  addedAt: string;
+}
+
+export function loadSyncedTopBets(): SyncedTopBet[] {
+  try {
+    const raw = localStorage.getItem(TOP_BETS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveSyncedTopBets(bets: SyncedTopBet[]) {
+  localStorage.setItem(TOP_BETS_KEY, JSON.stringify(bets));
+}
+
+export function clearSyncedTopBets() {
+  localStorage.removeItem(TOP_BETS_KEY);
+}
   const p = winRate / 100;
   const q = 1 - p;
   const b = odds - 1;
