@@ -289,7 +289,7 @@ const BankrollManager = () => {
 
         {/* TOP BETS — synced from Analiză Meci */}
         {syncedBets.length > 0 && (
-          <Card className="border-border">
+          <Card id="top-bets" className="border-border scroll-mt-16">
             <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
               <CardTitle className="text-foreground flex items-center gap-2 text-base">
                 🔥 Top Bets <span className="text-xs font-normal text-muted-foreground">({syncedBets.length} sincronizate din analiză)</span>
