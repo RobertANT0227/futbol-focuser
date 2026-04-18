@@ -84,6 +84,12 @@ export interface BetRecommendation {
   tipsterTier: 'tipster' | 'tipster_premium';
   winRate: number;
   aiExplanation: string;
+  // Fixed-stake (1%–5%) confidence-based system
+  stakeConfidence: 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+  stakePct: number;     // 0.01 .. 0.05
+  stakeLei: number;     // computed from current bankroll
+  ev: number;           // expected value (decimal): prob*odds - 1
+  fragile: boolean;
 }
 
 export interface AnalysisResult {
