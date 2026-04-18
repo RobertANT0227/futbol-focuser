@@ -1,10 +1,30 @@
+export type ConfidenceLevel = 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+
+export const CONFIDENCE_STAKE_PCT: Record<ConfidenceLevel, number> = {
+  VERY_LOW: 0.01,   // 1%
+  LOW: 0.02,        // 2%
+  MEDIUM: 0.03,     // 3%
+  HIGH: 0.04,       // 4%
+  VERY_HIGH: 0.05,  // 5%
+};
+
+export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
+  VERY_LOW: 'Very Low',
+  LOW: 'Low',
+  MEDIUM: 'Medium',
+  HIGH: 'High',
+  VERY_HIGH: 'Very High',
+};
+
 export interface BetRecord {
   id: string;
   match: string;
   odds: number;
   result: 'WIN' | 'LOSS';
   risk: 'LOW' | 'MEDIUM' | 'HIGH';
-  stake: number;
+  confidence: ConfidenceLevel;
+  stakePct: number;     // e.g. 0.03
+  stake: number;        // lei
   profit: number;
   bankrollAfter: number;
   date: string;
