@@ -1,4 +1,63 @@
 import type { MatchData, TeamStats, UserPlan, PoissonMatrix, BetRecommendation, AnalysisResult, MonteCarloResult, AnalysisStep } from './types';
+import { deriveConfidence, calculateConfidenceStake, loadBankrollState } from './bankroll';
+
+/**
+ * Detect "fragile" scenarios where outcome can easily flip:
+ * - "Under" selections in matches where combined xG is high (>= 2.6)
+ * - "Over" selections when combined xG is low (<= 1.9)
+ * - BTTS Nu when both teams score regularly
+ * - Underdog winner picks at high odds (>4) with low stability
+ */
+function isFragileScenario(args: {
+  selection: string;
+  category: string;
+  combinedXG: number;
+  homeScores: number;
+  awayScores: number;
+  odds: number;
+  stability: number;
+}): boolean {
+  const { selection, category, combinedXG, homeScores, awayScores, odds, stability } = args;
+  if (category === 'goals') {
+    if (selection.includes('Under') && combinedXG >= 2.6) return true;
+    if (selection.includes('Over') && combinedXG <= 1.9) return true;
+    if (selection.includes('BTTS Nu') && homeScores >= 1.3 && awayScores >= 1.3) return true;
+  }
+  if (category === 'winner' && odds >= 4 && stability < 0.55) return true;
+  return false;
+}
+
+function buildStakeFields(args: {
+  modelConfidence: 'high' | 'medium' | 'low';
+  winRate: number;
+  value: number;
+  stability: number;
+  risk: 'low' | 'medium' | 'high';
+  fragile: boolean;
+  prob: number;
+  odds: number;
+  bankroll: number;
+}) {
+  const stakeConfidence = deriveConfidence({
+    modelConfidence: args.modelConfidence,
+    winRate: args.winRate,
+    value: args.value,
+    stability: args.stability,
+    risk: args.risk,
+    fragile: args.fragile,
+  });
+  const { pct, lei } = calculateConfidenceStake(args.bankroll, stakeConfidence, 1);
+  const ev = args.prob * args.odds - 1;
+  return { stakeConfidence, stakePct: pct, stakeLei: lei, ev };
+}
+
+function getCurrentBankroll(plan?: UserPlan): number {
+  const state = loadBankrollState();
+  if (state) return state.currentBankroll;
+  return plan?.bankroll || 1000;
+}
+
+
 
 // ===== FORM CALCULATION =====
 function formPoints(form: ('W' | 'D' | 'L')[]): number {
@@ -529,6 +588,11 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
 
   const analysisSteps = buildAnalysisSteps(match, homeXG, awayXG, probs, mc, expCorners, homeStyle, awayStyle);
 
+  const bankroll = getCurrentBankroll(plan);
+  const combinedXG = homeXG + awayXG;
+  const homeScores = match.homeTeam.goalsScored;
+  const awayScores = match.awayTeam.goalsScored;
+
   const recommendations: BetRecommendation[] = [];
   const allCategories = ['corners', 'winner', 'goals'];
 
@@ -552,6 +616,9 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
       match, homeStyle, awayStyle, homeXG, awayXG, expCorners, allCategories
     );
 
+    const fragile = isFragileScenario({ selection: bet.selection, category: 'winner', combinedXG, homeScores, awayScores, odds: bet.odds, stability });
+    const stakeFields = buildStakeFields({ modelConfidence: confidence, winRate, value, stability, risk, fragile, prob: bet.prob, odds: bet.odds, bankroll });
+
     recommendations.push({
       type: 'Solist',
       category: 'winner',
@@ -568,6 +635,8 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
       tipsterTier: assignTipsterTier({ value, stability, confidence, risk }),
       winRate,
       aiExplanation,
+      ...stakeFields,
+      fragile,
     });
   }
 
@@ -592,6 +661,9 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
       match, homeStyle, awayStyle, homeXG, awayXG, expCorners, allCategories
     );
 
+    const fragile = isFragileScenario({ selection: bet.selection, category: 'goals', combinedXG, homeScores, awayScores, odds: bet.odds, stability });
+    const stakeFields = buildStakeFields({ modelConfidence: confidence, winRate, value, stability, risk, fragile, prob: bet.prob, odds: bet.odds, bankroll });
+
     recommendations.push({
       type: bet.type,
       category: 'goals',
@@ -608,6 +680,8 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
       tipsterTier: assignTipsterTier({ value, stability, confidence, risk }),
       winRate,
       aiExplanation,
+      ...stakeFields,
+      fragile,
     });
   }
 
@@ -633,6 +707,9 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
           match, homeStyle, awayStyle, homeXG, awayXG, expCorners, allCategories
         );
 
+        const fragile = isFragileScenario({ selection: bet.selection, category: 'corners', combinedXG, homeScores, awayScores, odds: bet.odds, stability });
+        const stakeFields = buildStakeFields({ modelConfidence: confidence, winRate, value, stability, risk, fragile, prob: bet.prob, odds: bet.odds, bankroll });
+
         recommendations.push({
           type: 'Cornere',
           category: 'corners',
@@ -649,6 +726,8 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
           tipsterTier: assignTipsterTier({ value, stability, confidence, risk }),
           winRate,
           aiExplanation,
+          ...stakeFields,
+          fragile,
         });
       }
     }

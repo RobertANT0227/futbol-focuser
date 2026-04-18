@@ -48,6 +48,9 @@ import {
 } from 'lucide-react';
 import {
   type BankrollState,
+  type ConfidenceLevel,
+  CONFIDENCE_LABEL,
+  CONFIDENCE_STAKE_PCT,
   getDefaultBankrollState,
   loadBankrollState,
   saveBankrollState,
@@ -56,9 +59,13 @@ import {
   getCashOutStatus,
   getBankrollChartData,
   getMonthlyProfitData,
-  calculateKelly,
-  calculateStake,
+  calculateConfidenceStake,
+  loadSyncedTopBets,
+  clearSyncedTopBets,
+  type SyncedTopBet,
 } from '@/lib/bankroll';
+import { BetCard } from '@/components/BetCard';
+import type { BetRecommendation } from '@/lib/types';
 
 const BankrollManager = () => {
   const navigate = useNavigate();
@@ -73,7 +80,11 @@ const BankrollManager = () => {
   const [odds, setOdds] = useState('');
   const [result, setResult] = useState<'WIN' | 'LOSS'>('WIN');
   const [risk, setRisk] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
-  const [winRate, setWinRate] = useState('80');
+  const [winRate, setWinRate] = useState('70');
+  const [confidence, setConfidence] = useState<ConfidenceLevel>('MEDIUM');
+
+  // Top bets synced from analysis page
+  const [syncedBets, setSyncedBets] = useState<SyncedTopBet[]>(() => loadSyncedTopBets());
 
   const stats = getStats(state);
   const cashOut = getCashOutStatus(state);
@@ -95,11 +106,24 @@ const BankrollManager = () => {
     const o = parseFloat(odds);
     const wr = parseFloat(winRate);
     if (o <= 1 || wr <= 0 || wr > 100) return;
-    const newState = addBet(state, matchName, o, result, risk, wr);
+    const newState = addBet(state, matchName, o, result, risk, wr, confidence);
     setState(newState);
     setMatchName('');
     setOdds('');
-    setWinRate('80');
+    setWinRate('70');
+  };
+
+  const handlePrefillFromTopBet = (b: SyncedTopBet) => {
+    setMatchName(`${b.matchLabel} — ${b.selection}`);
+    setOdds(b.odds.toFixed(2));
+    setWinRate(b.winRate.toFixed(0));
+    setConfidence(b.stakeConfidence);
+    setRisk(b.risk.toUpperCase() as 'LOW' | 'MEDIUM' | 'HIGH');
+  };
+
+  const handleClearSynced = () => {
+    clearSyncedTopBets();
+    setSyncedBets([]);
   };
 
   const handleReset = () => {
@@ -108,12 +132,8 @@ const BankrollManager = () => {
     setShowSetup(true);
   };
 
-  const kellyPreview = odds && winRate
-    ? calculateKelly(parseFloat(winRate) || 0, parseFloat(odds) || 0)
-    : 0;
-  const stakePreview = odds && winRate
-    ? calculateStake(state.currentBankroll, parseFloat(winRate) || 0, parseFloat(odds) || 0, risk, state.stakeModifier)
-    : 0;
+  // Stake preview using confidence-based fixed stake (synced with analysis)
+  const stakePreview = calculateConfidenceStake(state.currentBankroll, confidence, state.stakeModifier);
 
   if (showSetup) {
     return (
@@ -267,6 +287,66 @@ const BankrollManager = () => {
           </Card>
         )}
 
+        {/* TOP BETS — synced from Analiză Meci */}
+        {syncedBets.length > 0 && (
+          <Card id="top-bets" className="border-border scroll-mt-16">
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-foreground flex items-center gap-2 text-base">
+                🔥 Top Bets <span className="text-xs font-normal text-muted-foreground">({syncedBets.length} sincronizate din analiză)</span>
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleClearSynced} className="text-xs text-muted-foreground">
+                Curăță
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[...syncedBets]
+                  .sort((a, b) => b.ev - a.ev)
+                  .slice(0, 6)
+                  .map((b, i) => {
+                    // Recompute stakeLei against current bankroll for live sync
+                    const live = calculateConfidenceStake(state.currentBankroll, b.stakeConfidence, state.stakeModifier);
+                    const recoShape: BetRecommendation = {
+                      type: '',
+                      category: b.category,
+                      selection: b.selection,
+                      modelProbability: 0,
+                      bookmakerProbability: 0,
+                      value: b.value,
+                      odds: b.odds,
+                      kellyStake: 0,
+                      kellyPercent: 0,
+                      confidence: 'medium',
+                      stability: 0,
+                      risk: b.risk,
+                      tipsterTier: 'tipster',
+                      winRate: b.winRate,
+                      aiExplanation: '',
+                      stakeConfidence: b.stakeConfidence,
+                      stakePct: live.pct,
+                      stakeLei: live.lei,
+                      ev: b.ev,
+                      fragile: b.fragile,
+                    };
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handlePrefillFromTopBet(b)}
+                        className="text-left transition-transform hover:scale-[1.01]"
+                      >
+                        <BetCard bet={recoShape} matchLabel={b.matchLabel} rank={i + 1} />
+                      </button>
+                    );
+                  })}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                💡 Click pe un card pentru a precompleta formularul
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Add bet */}
           <Card className="border-border lg:col-span-1">
@@ -308,6 +388,21 @@ const BankrollManager = () => {
                   />
                 </div>
               </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Confidence Level</label>
+                <Select value={confidence} onValueChange={v => setConfidence(v as ConfidenceLevel)}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VERY_HIGH">🟢 Very High — 5%</SelectItem>
+                    <SelectItem value="HIGH">🟢 High — 4%</SelectItem>
+                    <SelectItem value="MEDIUM">🟡 Medium — 3%</SelectItem>
+                    <SelectItem value="LOW">🔴 Low — 2%</SelectItem>
+                    <SelectItem value="VERY_LOW">🔴 Very Low — 1%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Rezultat</label>
@@ -336,19 +431,22 @@ const BankrollManager = () => {
                 </div>
               </div>
 
-              {/* Kelly preview */}
-              {odds && winRate && parseFloat(odds) > 1 && (
-                <div className="bg-muted rounded-lg p-3 space-y-1 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Kelly %:</span>
-                    <span className="text-foreground">{(kellyPreview * 100).toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Stake sugerat:</span>
-                    <span className="text-primary font-semibold">{stakePreview.toFixed(2)}</span>
-                  </div>
+              {/* Stake preview — confidence-based fixed % */}
+              <div className="bg-muted rounded-lg p-3 space-y-1 text-xs font-mono">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Stake %:</span>
+                  <span className="text-accent font-semibold">{(stakePreview.pct * 100).toFixed(2)}%</span>
                 </div>
-              )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Stake (lei):</span>
+                  <span className="text-primary font-semibold">{stakePreview.lei.toFixed(2)}</span>
+                </div>
+                {state.stakeModifier !== 1 && (
+                  <div className="text-[10px] text-muted-foreground text-right">
+                    (incl. modifier ×{state.stakeModifier.toFixed(2)})
+                  </div>
+                )}
+              </div>
 
               <Button onClick={handleAddBet} className="w-full" disabled={!matchName || !odds}>
                 Adaugă pariu
@@ -449,7 +547,9 @@ const BankrollManager = () => {
                     <tr className="border-b border-border text-muted-foreground text-xs">
                       <th className="text-left py-2 px-2">#</th>
                       <th className="text-left py-2 px-2">Meci</th>
+                      <th className="text-center py-2 px-2">Conf.</th>
                       <th className="text-right py-2 px-2">Cotă</th>
+                      <th className="text-right py-2 px-2">Stake %</th>
                       <th className="text-right py-2 px-2">Stake</th>
                       <th className="text-center py-2 px-2">Rezultat</th>
                       <th className="text-right py-2 px-2">Profit</th>
@@ -457,24 +557,38 @@ const BankrollManager = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...state.bets].reverse().map((bet, i) => (
-                      <tr key={bet.id} className="border-b border-border/50 hover:bg-muted/30">
-                        <td className="py-2 px-2 text-muted-foreground font-mono text-xs">{state.bets.length - i}</td>
-                        <td className="py-2 px-2 text-foreground">{bet.match}</td>
-                        <td className="py-2 px-2 text-right font-mono">{bet.odds.toFixed(2)}</td>
-                        <td className="py-2 px-2 text-right font-mono">{bet.stake.toFixed(2)}</td>
-                        <td className="py-2 px-2 text-center">
-                          {bet.result === 'WIN'
-                            ? <span className="text-primary font-semibold">✅ W</span>
-                            : <span className="text-destructive font-semibold">❌ L</span>
-                          }
-                        </td>
-                        <td className={`py-2 px-2 text-right font-mono font-semibold ${bet.profit >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                          {bet.profit >= 0 ? '+' : ''}{bet.profit.toFixed(2)}
-                        </td>
-                        <td className="py-2 px-2 text-right font-mono">{bet.bankrollAfter.toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {[...state.bets].reverse().map((bet, i) => {
+                      const confTone =
+                        bet.confidence === 'VERY_HIGH' || bet.confidence === 'HIGH'
+                          ? 'text-primary'
+                          : bet.confidence === 'MEDIUM'
+                          ? 'text-accent'
+                          : 'text-destructive';
+                      return (
+                        <tr key={bet.id} className="border-b border-border/50 hover:bg-muted/30">
+                          <td className="py-2 px-2 text-muted-foreground font-mono text-xs">{state.bets.length - i}</td>
+                          <td className="py-2 px-2 text-foreground">{bet.match}</td>
+                          <td className={`py-2 px-2 text-center font-mono text-xs ${confTone}`}>
+                            {CONFIDENCE_LABEL[bet.confidence] ?? '—'}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono">{bet.odds.toFixed(2)}</td>
+                          <td className="py-2 px-2 text-right font-mono text-accent">
+                            {((bet.stakePct ?? 0) * 100).toFixed(1)}%
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono">{bet.stake.toFixed(2)}</td>
+                          <td className="py-2 px-2 text-center">
+                            {bet.result === 'WIN'
+                              ? <span className="text-primary font-semibold">✅ W</span>
+                              : <span className="text-destructive font-semibold">❌ L</span>
+                            }
+                          </td>
+                          <td className={`py-2 px-2 text-right font-mono font-semibold ${bet.profit >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                            {bet.profit >= 0 ? '+' : ''}{bet.profit.toFixed(2)}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono">{bet.bankrollAfter.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
