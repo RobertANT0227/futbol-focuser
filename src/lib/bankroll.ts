@@ -129,7 +129,7 @@ export function deriveConfidence(args: {
   if (stability < 0.35 || risk === 'high' || winRate < 55) return cap('VERY_LOW');
   if (modelConfidence === 'high' && winRate >= 80 && stability >= 0.7 && value >= 8 && risk === 'low') return cap('VERY_HIGH');
   if (modelConfidence === 'high' && winRate >= 75 && stability >= 0.6 && value >= 5) return cap('HIGH');
-  if (winRate >= 65 && value >= 3 && risk !== 'high') return cap('MEDIUM');
+  if (winRate >= 65 && value >= 3) return cap('MEDIUM');
   return cap('LOW');
 }
 
