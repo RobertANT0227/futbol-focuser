@@ -347,6 +347,8 @@ const BankrollManager = () => {
           </Card>
         )}
 
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: Add bet */}
           <Card className="border-border lg:col-span-1">
             <CardHeader>
               <CardTitle className="text-foreground flex items-center gap-2 text-base">
