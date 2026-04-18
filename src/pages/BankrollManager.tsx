@@ -80,7 +80,11 @@ const BankrollManager = () => {
   const [odds, setOdds] = useState('');
   const [result, setResult] = useState<'WIN' | 'LOSS'>('WIN');
   const [risk, setRisk] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
-  const [winRate, setWinRate] = useState('80');
+  const [winRate, setWinRate] = useState('70');
+  const [confidence, setConfidence] = useState<ConfidenceLevel>('MEDIUM');
+
+  // Top bets synced from analysis page
+  const [syncedBets, setSyncedBets] = useState<SyncedTopBet[]>(() => loadSyncedTopBets());
 
   const stats = getStats(state);
   const cashOut = getCashOutStatus(state);
@@ -102,11 +106,24 @@ const BankrollManager = () => {
     const o = parseFloat(odds);
     const wr = parseFloat(winRate);
     if (o <= 1 || wr <= 0 || wr > 100) return;
-    const newState = addBet(state, matchName, o, result, risk, wr);
+    const newState = addBet(state, matchName, o, result, risk, wr, confidence);
     setState(newState);
     setMatchName('');
     setOdds('');
-    setWinRate('80');
+    setWinRate('70');
+  };
+
+  const handlePrefillFromTopBet = (b: SyncedTopBet) => {
+    setMatchName(`${b.matchLabel} — ${b.selection}`);
+    setOdds(b.odds.toFixed(2));
+    setWinRate(b.winRate.toFixed(0));
+    setConfidence(b.stakeConfidence);
+    setRisk(b.risk.toUpperCase() as 'LOW' | 'MEDIUM' | 'HIGH');
+  };
+
+  const handleClearSynced = () => {
+    clearSyncedTopBets();
+    setSyncedBets([]);
   };
 
   const handleReset = () => {
@@ -115,12 +132,8 @@ const BankrollManager = () => {
     setShowSetup(true);
   };
 
-  const kellyPreview = odds && winRate
-    ? calculateKelly(parseFloat(winRate) || 0, parseFloat(odds) || 0)
-    : 0;
-  const stakePreview = odds && winRate
-    ? calculateStake(state.currentBankroll, parseFloat(winRate) || 0, parseFloat(odds) || 0, risk, state.stakeModifier)
-    : 0;
+  // Stake preview using confidence-based fixed stake (synced with analysis)
+  const stakePreview = calculateConfidenceStake(state.currentBankroll, confidence, state.stakeModifier);
 
   if (showSetup) {
     return (
