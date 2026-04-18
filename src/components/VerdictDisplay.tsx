@@ -1,19 +1,8 @@
-import type { AnalysisResult, BetRecommendation } from '@/lib/types';
+import type { AnalysisResult } from '@/lib/types';
 import { BetCard } from './BetCard';
 
 function pct(n: number): string {
   return (n * 100).toFixed(1) + '%';
-}
-
-function WinRateBadge({ wr }: { wr: number }) {
-  const color = wr >= 76 ? 'bg-primary/20 text-primary border-primary/30' :
-    wr >= 60 ? 'bg-accent/20 text-accent border-accent/30' :
-    'bg-destructive/20 text-destructive border-destructive/30';
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded border ${color}`}>
-      WR: {wr.toFixed(1)}%
-    </span>
-  );
 }
 
 function StyleBadge({ style }: { style: string }) {
@@ -21,8 +10,8 @@ function StyleBadge({ style }: { style: string }) {
     'bus-parking': { icon: '🚌', label: 'BUS PARKING', color: 'bg-destructive/20 text-destructive' },
     'high-press': { icon: '⚡', label: 'HIGH PRESS', color: 'bg-primary/20 text-primary' },
     'pressing': { icon: '🔥', label: 'PRESSING', color: 'bg-accent/20 text-accent' },
-    'possession': { icon: '🎯', label: 'POSESIE', color: 'bg-blue-500/20 text-blue-400' },
-    'counter': { icon: '⚡', label: 'CONTRAATAC', color: 'bg-purple-500/20 text-purple-400' },
+    'possession': { icon: '🎯', label: 'POSESIE', color: 'bg-bet-corners/20 text-bet-corners' },
+    'counter': { icon: '⚡', label: 'CONTRAATAC', color: 'bg-bet-value/20 text-bet-value' },
     'low-block': { icon: '🛡️', label: 'LOW-BLOCK', color: 'bg-muted text-muted-foreground' },
   };
   const s = labels[style] || { icon: '📊', label: style, color: 'bg-secondary text-muted-foreground' };
@@ -30,112 +19,6 @@ function StyleBadge({ style }: { style: string }) {
     <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded ${s.color}`}>
       {s.icon} {s.label}
     </span>
-  );
-}
-
-function TipsterBadge({ tier }: { tier: 'tipster' | 'tipster_premium' }) {
-  if (tier === 'tipster_premium') {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-        ⭐ PREMIUM
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded bg-secondary text-muted-foreground">
-      TIPSTER
-    </span>
-  );
-}
-
-function CategoryIcon({ category }: { category: string }) {
-  switch (category) {
-    case 'corners': return <span>⛳</span>;
-    case 'winner': return <span>🏆</span>;
-    case 'goals': return <span>⚽</span>;
-    default: return null;
-  }
-}
-
-function AIExplanationPanel({ explanation }: { explanation: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-secondary/30 p-3 mt-2">
-      <div className="flex items-start gap-2">
-        <span className="text-sm mt-0.5">🤖</span>
-        <p className="text-xs text-secondary-foreground leading-relaxed">{explanation}</p>
-      </div>
-    </div>
-  );
-}
-
-function BestBetCard({ bet, homeStyle, awayStyle }: { bet: BetRecommendation; homeStyle: string; awayStyle: string }) {
-  const borderColor = bet.category === 'corners' ? 'border-bet-corners/50' : bet.category === 'winner' ? 'border-bet-winner/50' : 'border-bet-goals/50';
-
-  return (
-    <div className={`rounded-xl border-2 ${borderColor} bg-card p-6 glow-green animate-slide-up`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl"><CategoryIcon category={bet.category} /></span>
-          <div>
-            <div className="text-lg font-bold text-foreground">{bet.selection}</div>
-            <div className="text-xs text-muted-foreground font-mono">@ {bet.odds.toFixed(2)}</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <WinRateBadge wr={bet.winRate} />
-          <TipsterBadge tier={bet.tipsterTier} />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <div className="bg-secondary/50 rounded-lg p-3 text-center">
-          <div className="text-xs text-muted-foreground mb-1">Win Rate</div>
-          <div className="text-xl font-bold text-primary font-mono">{bet.winRate.toFixed(1)}%</div>
-        </div>
-        <div className="bg-secondary/50 rounded-lg p-3 text-center">
-          <div className="text-xs text-muted-foreground mb-1">Value</div>
-          <div className={`text-xl font-bold font-mono ${bet.value > 0 ? 'text-primary' : 'text-destructive'}`}>
-            {bet.value > 0 ? '+' : ''}{bet.value.toFixed(1)}%
-          </div>
-        </div>
-        <div className="bg-secondary/50 rounded-lg p-3 text-center">
-          <div className="text-xs text-muted-foreground mb-1">Kelly Stake</div>
-          <div className="text-xl font-bold text-accent font-mono">{bet.kellyPercent.toFixed(2)}%</div>
-          <div className="text-[10px] text-muted-foreground">{bet.kellyStake.toFixed(1)} LEI</div>
-        </div>
-        <div className="bg-secondary/50 rounded-lg p-3 text-center">
-          <div className="text-xs text-muted-foreground mb-1">Model vs Book</div>
-          <div className="text-sm font-bold font-mono text-primary">{pct(bet.modelProbability)}</div>
-          <div className="text-[10px] text-muted-foreground">vs {pct(bet.bookmakerProbability)}</div>
-        </div>
-      </div>
-
-      <AIExplanationPanel explanation={bet.aiExplanation} />
-    </div>
-  );
-}
-
-function CompactBetRow({ bet, index }: { bet: BetRecommendation; index: number }) {
-  return (
-    <div className={`flex items-center gap-3 rounded-lg p-3 text-sm ${bet.winRate >= 76 ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
-      <span className="text-lg font-bold text-muted-foreground w-6 text-center">#{index + 1}</span>
-      <CategoryIcon category={bet.category} />
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold truncate flex items-center gap-2">
-          {bet.selection}
-          {bet.winRate >= 76 && <WinRateBadge wr={bet.winRate} />}
-          <TipsterBadge tier={bet.tipsterTier} />
-        </div>
-      </div>
-      <div className="text-right font-mono text-xs space-y-0.5">
-        <div>Cotă: <span className="font-semibold">{bet.odds.toFixed(2)}</span></div>
-        <div>Value: <span className={bet.value > 0 ? 'text-primary' : 'text-destructive'}>{bet.value > 0 ? '+' : ''}{bet.value.toFixed(1)}%</span></div>
-      </div>
-      <div className="text-right text-xs space-y-0.5">
-        <div>Kelly: <span className="text-accent">{bet.kellyPercent.toFixed(2)}%</span></div>
-        <div>WR: <span className="text-primary">{bet.winRate.toFixed(1)}%</span></div>
-      </div>
-    </div>
   );
 }
 
