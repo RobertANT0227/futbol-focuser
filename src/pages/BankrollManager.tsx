@@ -328,6 +328,21 @@ const BankrollManager = () => {
                   />
                 </div>
               </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Confidence Level</label>
+                <Select value={confidence} onValueChange={v => setConfidence(v as ConfidenceLevel)}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="VERY_HIGH">🟢 Very High — 5%</SelectItem>
+                    <SelectItem value="HIGH">🟢 High — 4%</SelectItem>
+                    <SelectItem value="MEDIUM">🟡 Medium — 3%</SelectItem>
+                    <SelectItem value="LOW">🔴 Low — 2%</SelectItem>
+                    <SelectItem value="VERY_LOW">🔴 Very Low — 1%</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Rezultat</label>
@@ -356,19 +371,22 @@ const BankrollManager = () => {
                 </div>
               </div>
 
-              {/* Kelly preview */}
-              {odds && winRate && parseFloat(odds) > 1 && (
-                <div className="bg-muted rounded-lg p-3 space-y-1 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Kelly %:</span>
-                    <span className="text-foreground">{(kellyPreview * 100).toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Stake sugerat:</span>
-                    <span className="text-primary font-semibold">{stakePreview.toFixed(2)}</span>
-                  </div>
+              {/* Stake preview — confidence-based fixed % */}
+              <div className="bg-muted rounded-lg p-3 space-y-1 text-xs font-mono">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Stake %:</span>
+                  <span className="text-accent font-semibold">{(stakePreview.pct * 100).toFixed(2)}%</span>
                 </div>
-              )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Stake (lei):</span>
+                  <span className="text-primary font-semibold">{stakePreview.lei.toFixed(2)}</span>
+                </div>
+                {state.stakeModifier !== 1 && (
+                  <div className="text-[10px] text-muted-foreground text-right">
+                    (incl. modifier ×{state.stakeModifier.toFixed(2)})
+                  </div>
+                )}
+              </div>
 
               <Button onClick={handleAddBet} className="w-full" disabled={!matchName || !odds}>
                 Adaugă pariu
