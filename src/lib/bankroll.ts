@@ -94,22 +94,61 @@ export function calculateStake(
   return Math.max(0, Math.round(stake * 100) / 100);
 }
 
+/**
+ * Confidence-based fixed stake (1%–5% of bankroll).
+ */
+export function calculateConfidenceStake(
+  bankroll: number,
+  confidence: ConfidenceLevel,
+  stakeModifier: number = 1
+): { pct: number; lei: number } {
+  const pct = CONFIDENCE_STAKE_PCT[confidence] * stakeModifier;
+  const lei = Math.round(bankroll * pct * 100) / 100;
+  return { pct, lei };
+}
+
+/**
+ * Determine confidence level from analysis signals.
+ */
+export function deriveConfidence(args: {
+  modelConfidence: 'high' | 'medium' | 'low';
+  winRate: number;
+  value: number;
+  stability: number;
+  risk: 'low' | 'medium' | 'high';
+  fragile?: boolean;
+}): ConfidenceLevel {
+  const { modelConfidence, winRate, value, stability, risk, fragile } = args;
+
+  const cap = (lvl: ConfidenceLevel): ConfidenceLevel => {
+    if (!fragile) return lvl;
+    if (lvl === 'VERY_HIGH' || lvl === 'HIGH' || lvl === 'MEDIUM') return 'LOW';
+    return lvl;
+  };
+
+  if (stability < 0.35 || risk === 'high' || winRate < 55) return cap('VERY_LOW');
+  if (modelConfidence === 'high' && winRate >= 80 && stability >= 0.7 && value >= 8 && risk === 'low') return cap('VERY_HIGH');
+  if (modelConfidence === 'high' && winRate >= 75 && stability >= 0.6 && value >= 5) return cap('HIGH');
+  if (winRate >= 65 && value >= 3 && risk !== 'high') return cap('MEDIUM');
+  return cap('LOW');
+}
+
 export function addBet(
   state: BankrollState,
   match: string,
   odds: number,
   result: 'WIN' | 'LOSS',
   risk: 'LOW' | 'MEDIUM' | 'HIGH',
-  winRate: number
+  winRate: number,
+  confidence: ConfidenceLevel = 'MEDIUM'
 ): BankrollState {
-  const stake = calculateStake(state.currentBankroll, winRate, odds, risk, state.stakeModifier);
+  const { pct, lei: stake } = calculateConfidenceStake(state.currentBankroll, confidence, state.stakeModifier);
   const profit = result === 'WIN' ? stake * (odds - 1) : -stake;
   const bankrollAfter = Math.round((state.currentBankroll + profit) * 100) / 100;
 
   let consecutiveLosses = result === 'LOSS' ? state.consecutiveLosses + 1 : 0;
   let consecutiveWins = result === 'WIN' ? state.consecutiveWins + 1 : 0;
 
-  // Risk control
   let stakeModifier = 1.0;
   if (consecutiveLosses >= 5) stakeModifier = 0.5;
   else if (consecutiveLosses >= 3) stakeModifier = 0.75;
@@ -121,6 +160,8 @@ export function addBet(
     odds,
     result,
     risk,
+    confidence,
+    stakePct: pct,
     stake,
     profit: Math.round(profit * 100) / 100,
     bankrollAfter,
