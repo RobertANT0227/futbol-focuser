@@ -9,6 +9,7 @@ import { DailyTop } from '@/components/DailyTop';
 import { HowItWorks } from '@/components/HowItWorks';
 import { PasswordGate } from '@/components/PasswordGate';
 import { runAnalysis } from '@/lib/engine';
+import { saveSyncedTopBets, type SyncedTopBet, loadSyncedTopBets } from '@/lib/bankroll';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
 const Index = () => {
@@ -32,6 +33,30 @@ const Index = () => {
       const analysis = runAnalysis(match, planSet ? plan : undefined);
       setResult(analysis);
       setAnalyzing(false);
+
+      // Sync top bets (positive value, sorted by EV) to Bankroll Manager
+      const matchLabel = `${match.homeTeam.name} vs ${match.awayTeam.name}`;
+      const synced: SyncedTopBet[] = analysis.recommendations
+        .filter((r) => r.value > 0)
+        .sort((a, b) => b.ev - a.ev)
+        .map((r) => ({
+          matchLabel,
+          selection: r.selection,
+          category: r.category,
+          odds: r.odds,
+          winRate: r.winRate,
+          ev: r.ev,
+          value: r.value,
+          stakeConfidence: r.stakeConfidence,
+          stakePct: r.stakePct,
+          stakeLei: r.stakeLei,
+          fragile: r.fragile,
+          risk: r.risk,
+          addedAt: new Date().toISOString(),
+        }));
+      // Merge with previously synced bets from other matches (dedupe by matchLabel+selection)
+      const prev = loadSyncedTopBets().filter((b) => b.matchLabel !== matchLabel);
+      saveSyncedTopBets([...prev, ...synced]);
     }, 500);
   };
 
