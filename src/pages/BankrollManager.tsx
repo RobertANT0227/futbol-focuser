@@ -287,8 +287,66 @@ const BankrollManager = () => {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Add bet */}
+        {/* TOP BETS — synced from Analiză Meci */}
+        {syncedBets.length > 0 && (
+          <Card className="border-border">
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-foreground flex items-center gap-2 text-base">
+                🔥 Top Bets <span className="text-xs font-normal text-muted-foreground">({syncedBets.length} sincronizate din analiză)</span>
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={handleClearSynced} className="text-xs text-muted-foreground">
+                Curăță
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[...syncedBets]
+                  .sort((a, b) => b.ev - a.ev)
+                  .slice(0, 6)
+                  .map((b, i) => {
+                    // Recompute stakeLei against current bankroll for live sync
+                    const live = calculateConfidenceStake(state.currentBankroll, b.stakeConfidence, state.stakeModifier);
+                    const recoShape: BetRecommendation = {
+                      type: '',
+                      category: b.category,
+                      selection: b.selection,
+                      modelProbability: 0,
+                      bookmakerProbability: 0,
+                      value: b.value,
+                      odds: b.odds,
+                      kellyStake: 0,
+                      kellyPercent: 0,
+                      confidence: 'medium',
+                      stability: 0,
+                      risk: b.risk,
+                      tipsterTier: 'tipster',
+                      winRate: b.winRate,
+                      aiExplanation: '',
+                      stakeConfidence: b.stakeConfidence,
+                      stakePct: live.pct,
+                      stakeLei: live.lei,
+                      ev: b.ev,
+                      fragile: b.fragile,
+                    };
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => handlePrefillFromTopBet(b)}
+                        className="text-left transition-transform hover:scale-[1.01]"
+                      >
+                        <BetCard bet={recoShape} matchLabel={b.matchLabel} rank={i + 1} />
+                      </button>
+                    );
+                  })}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                💡 Click pe un card pentru a precompleta formularul
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
           <Card className="border-border lg:col-span-1">
             <CardHeader>
               <CardTitle className="text-foreground flex items-center gap-2 text-base">
