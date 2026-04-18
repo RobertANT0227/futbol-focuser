@@ -547,7 +547,9 @@ const BankrollManager = () => {
                     <tr className="border-b border-border text-muted-foreground text-xs">
                       <th className="text-left py-2 px-2">#</th>
                       <th className="text-left py-2 px-2">Meci</th>
+                      <th className="text-center py-2 px-2">Conf.</th>
                       <th className="text-right py-2 px-2">Cotă</th>
+                      <th className="text-right py-2 px-2">Stake %</th>
                       <th className="text-right py-2 px-2">Stake</th>
                       <th className="text-center py-2 px-2">Rezultat</th>
                       <th className="text-right py-2 px-2">Profit</th>
@@ -555,24 +557,38 @@ const BankrollManager = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...state.bets].reverse().map((bet, i) => (
-                      <tr key={bet.id} className="border-b border-border/50 hover:bg-muted/30">
-                        <td className="py-2 px-2 text-muted-foreground font-mono text-xs">{state.bets.length - i}</td>
-                        <td className="py-2 px-2 text-foreground">{bet.match}</td>
-                        <td className="py-2 px-2 text-right font-mono">{bet.odds.toFixed(2)}</td>
-                        <td className="py-2 px-2 text-right font-mono">{bet.stake.toFixed(2)}</td>
-                        <td className="py-2 px-2 text-center">
-                          {bet.result === 'WIN'
-                            ? <span className="text-primary font-semibold">✅ W</span>
-                            : <span className="text-destructive font-semibold">❌ L</span>
-                          }
-                        </td>
-                        <td className={`py-2 px-2 text-right font-mono font-semibold ${bet.profit >= 0 ? 'text-primary' : 'text-destructive'}`}>
-                          {bet.profit >= 0 ? '+' : ''}{bet.profit.toFixed(2)}
-                        </td>
-                        <td className="py-2 px-2 text-right font-mono">{bet.bankrollAfter.toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {[...state.bets].reverse().map((bet, i) => {
+                      const confTone =
+                        bet.confidence === 'VERY_HIGH' || bet.confidence === 'HIGH'
+                          ? 'text-primary'
+                          : bet.confidence === 'MEDIUM'
+                          ? 'text-accent'
+                          : 'text-destructive';
+                      return (
+                        <tr key={bet.id} className="border-b border-border/50 hover:bg-muted/30">
+                          <td className="py-2 px-2 text-muted-foreground font-mono text-xs">{state.bets.length - i}</td>
+                          <td className="py-2 px-2 text-foreground">{bet.match}</td>
+                          <td className={`py-2 px-2 text-center font-mono text-xs ${confTone}`}>
+                            {CONFIDENCE_LABEL[bet.confidence] ?? '—'}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono">{bet.odds.toFixed(2)}</td>
+                          <td className="py-2 px-2 text-right font-mono text-accent">
+                            {((bet.stakePct ?? 0) * 100).toFixed(1)}%
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono">{bet.stake.toFixed(2)}</td>
+                          <td className="py-2 px-2 text-center">
+                            {bet.result === 'WIN'
+                              ? <span className="text-primary font-semibold">✅ W</span>
+                              : <span className="text-destructive font-semibold">❌ L</span>
+                            }
+                          </td>
+                          <td className={`py-2 px-2 text-right font-mono font-semibold ${bet.profit >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                            {bet.profit >= 0 ? '+' : ''}{bet.profit.toFixed(2)}
+                          </td>
+                          <td className="py-2 px-2 text-right font-mono">{bet.bankrollAfter.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
