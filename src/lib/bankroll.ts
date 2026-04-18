@@ -107,6 +107,8 @@ export function saveSyncedTopBets(bets: SyncedTopBet[]) {
 export function clearSyncedTopBets() {
   localStorage.removeItem(TOP_BETS_KEY);
 }
+
+export function calculateKelly(winRate: number, odds: number): number {
   const p = winRate / 100;
   const q = 1 - p;
   const b = odds - 1;
