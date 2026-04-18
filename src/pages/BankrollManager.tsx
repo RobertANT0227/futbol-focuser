@@ -48,6 +48,9 @@ import {
 } from 'lucide-react';
 import {
   type BankrollState,
+  type ConfidenceLevel,
+  CONFIDENCE_LABEL,
+  CONFIDENCE_STAKE_PCT,
   getDefaultBankrollState,
   loadBankrollState,
   saveBankrollState,
@@ -56,9 +59,13 @@ import {
   getCashOutStatus,
   getBankrollChartData,
   getMonthlyProfitData,
-  calculateKelly,
-  calculateStake,
+  calculateConfidenceStake,
+  loadSyncedTopBets,
+  clearSyncedTopBets,
+  type SyncedTopBet,
 } from '@/lib/bankroll';
+import { BetCard } from '@/components/BetCard';
+import type { BetRecommendation } from '@/lib/types';
 
 const BankrollManager = () => {
   const navigate = useNavigate();
