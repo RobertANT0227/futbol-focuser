@@ -26,12 +26,12 @@ export function HowItWorks({ steps, result }: Props) {
 
         {hasSteps ? (
           <div className="space-y-4">
-            {/* AI Summary */}
+            {/* Summary */}
             {result?.bestBet && (
               <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4">
                 <div className="flex items-start gap-2 mb-2">
-                  <span className="text-lg">🤖</span>
-                  <h3 className="font-bold text-primary text-sm">AI Analysis Summary</h3>
+                  <span className="text-lg">📌</span>
+                  <h3 className="font-bold text-primary text-sm">Verdict</h3>
                 </div>
                 <p className="text-sm text-secondary-foreground leading-relaxed mb-3">
                   {result.bestBet.aiExplanation}
