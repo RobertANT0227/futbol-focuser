@@ -7,7 +7,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.admin-create-user]
-verify_jwt = true
+verify_jwt = false
 
 [functions.admin-delete-user]
-verify_jwt = true
+verify_jwt = false
