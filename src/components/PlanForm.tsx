@@ -66,7 +66,7 @@ export function PlanForm({ plan, onChange }: Props) {
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">💡 Kelly Criterion full — robotul calculează automat miza optimă din bankroll.</p>
+      <p className="text-xs text-muted-foreground">💡 Robotul calculează automat miza optimă din bankroll.</p>
     </div>
   );
 }

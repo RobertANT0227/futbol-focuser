@@ -83,7 +83,7 @@ export function DailyTop({ matches, onClear }: Props) {
                 <div>Value: <span className={item.bet.value > 0 ? 'text-primary' : 'text-destructive'}>
                   {item.bet.value > 0 ? '+' : ''}{item.bet.value.toFixed(1)}%
                 </span></div>
-                <div>Kelly: <span className="text-accent">{item.bet.kellyPercent.toFixed(2)}%</span></div>
+                <div>Stake: <span className="text-accent">{item.bet.kellyPercent.toFixed(2)}%</span></div>
               </div>
             </div>
           ))}

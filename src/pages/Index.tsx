@@ -123,9 +123,6 @@ const Index = () => {
           </div>
           <div className="flex items-center gap-3">
             <HowItWorks steps={result?.analysisSteps} result={result} />
-            <div className="text-xs font-mono text-muted-foreground hidden md:block">
-              Poisson + Monte Carlo + Kelly
-            </div>
           </div>
         </div>
       </header>
@@ -151,7 +148,7 @@ const Index = () => {
           {planSet && <PlanForm plan={plan} onChange={setPlan} />}
           {!planSet && (
             <div className="rounded-lg border border-border bg-card/50 p-4 text-center">
-              <p className="text-sm text-muted-foreground">💡 Activează planul personalizat pentru filtrarea automată a pariurilor după risc și preferințe. Kelly Criterion full automat.</p>
+              <p className="text-sm text-muted-foreground">💡 Activează planul personalizat pentru filtrarea automată a pariurilor după risc și preferințe.</p>
             </div>
           )}
         </div>
@@ -195,9 +192,6 @@ const Index = () => {
                   <span className="flex items-center gap-2">🔬 Analizează meciul</span>
                 )}
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Poisson Distribution • 10.000 simulări Monte Carlo • Kelly Criterion Full • AI Explanation
-              </p>
             </>
           ) : (
             <Button

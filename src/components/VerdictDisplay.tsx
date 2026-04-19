@@ -120,11 +120,11 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
             ))}
           </div>
 
-          {/* AI explanation for top pick only */}
+          {/* Top pick explanation */}
           {valueBets[0] && (
             <div className="rounded-lg border border-border bg-secondary/30 p-3 mt-4">
               <div className="flex items-start gap-2">
-                <span className="text-sm mt-0.5">🤖</span>
+                <span className="text-sm mt-0.5">📌</span>
                 <div className="text-xs text-secondary-foreground leading-relaxed">
                   <strong className="text-foreground">Top pick — {valueBets[0].selection}:</strong>{' '}
                   {valueBets[0].aiExplanation}
