@@ -1,1 +1,13 @@
 project_id = "wlqfkormyknfqvlgkoju"
+
+[functions.seed-owner]
+verify_jwt = false
+
+[functions.login-guarded]
+verify_jwt = false
+
+[functions.admin-create-user]
+verify_jwt = true
+
+[functions.admin-delete-user]
+verify_jwt = true
