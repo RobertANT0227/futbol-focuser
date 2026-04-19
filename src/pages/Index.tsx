@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { MatchInputForm, defaultMatch } from '@/components/MatchInputForm';
@@ -7,13 +7,15 @@ import { PlanForm, defaultPlan } from '@/components/PlanForm';
 import { VerdictDisplay } from '@/components/VerdictDisplay';
 import { DailyTop } from '@/components/DailyTop';
 import { HowItWorks } from '@/components/HowItWorks';
-import { PasswordGate } from '@/components/PasswordGate';
 import { runAnalysis } from '@/lib/engine';
 import { saveSyncedTopBets, type SyncedTopBet, loadSyncedTopBets } from '@/lib/bankroll';
+import { useAuth } from '@/contexts/AuthContext';
+import { ROBOT_DAILY_LIMIT_CLIENT, getTodayRobotUsage, recordRobotUsage } from '@/lib/robotQuota';
+import { toast } from '@/hooks/use-toast';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
 const Index = () => {
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('unlocked') === '1');
+  const { user, isOwner, isClient } = useAuth();
   const [match, setMatch] = useState<MatchData>(defaultMatch());
   const [plan, setPlan] = useState<UserPlan>(defaultPlan);
   const [planSet, setPlanSet] = useState(false);
@@ -21,12 +23,37 @@ const Index = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [dailyMatches, setDailyMatches] = useState<DailyMatch[]>([]);
   const [savedMatch, setSavedMatch] = useState<MatchData | null>(null);
+  const [robotUsedToday, setRobotUsedToday] = useState<number>(0);
 
-  if (!unlocked) {
-    return <PasswordGate onUnlock={() => setUnlocked(true)} />;
-  }
+  // Load today's robot usage for client
+  useEffect(() => {
+    if (!user || !isClient) return;
+    getTodayRobotUsage(user.id).then(setRobotUsedToday);
+  }, [user, isClient]);
 
-  const handleAnalyze = () => {
+  const robotRemaining = isClient ? Math.max(0, ROBOT_DAILY_LIMIT_CLIENT - robotUsedToday) : Infinity;
+  const robotBlocked = isClient && robotRemaining <= 0;
+
+  const handleAnalyze = async () => {
+    if (robotBlocked) {
+      toast({
+        title: 'Limită atinsă',
+        description: `Ai folosit cele ${ROBOT_DAILY_LIMIT_CLIENT} analize zilnice. Reîncearcă mâine.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Consume quota for client BEFORE analysis
+    if (isClient && user) {
+      const ok = await recordRobotUsage(user.id);
+      if (!ok) {
+        toast({ title: 'Eroare', description: 'Nu s-a putut înregistra utilizarea.', variant: 'destructive' });
+        return;
+      }
+      setRobotUsedToday((n) => n + 1);
+    }
+
     setAnalyzing(true);
     setSavedMatch({ ...match });
     setTimeout(() => {
@@ -34,29 +61,30 @@ const Index = () => {
       setResult(analysis);
       setAnalyzing(false);
 
-      // Sync top bets (positive value, sorted by EV) to Bankroll Manager
-      const matchLabel = `${match.homeTeam.name} vs ${match.awayTeam.name}`;
-      const synced: SyncedTopBet[] = analysis.recommendations
-        .filter((r) => r.value > 0)
-        .sort((a, b) => b.ev - a.ev)
-        .map((r) => ({
-          matchLabel,
-          selection: r.selection,
-          category: r.category,
-          odds: r.odds,
-          winRate: r.winRate,
-          ev: r.ev,
-          value: r.value,
-          stakeConfidence: r.stakeConfidence,
-          stakePct: r.stakePct,
-          stakeLei: r.stakeLei,
-          fragile: r.fragile,
-          risk: r.risk,
-          addedAt: new Date().toISOString(),
-        }));
-      // Merge with previously synced bets from other matches (dedupe by matchLabel+selection)
-      const prev = loadSyncedTopBets().filter((b) => b.matchLabel !== matchLabel);
-      saveSyncedTopBets([...prev, ...synced]);
+      // Sync top bets to Bankroll Manager (only useful for owner; harmless for client)
+      if (isOwner) {
+        const matchLabel = `${match.homeTeam.name} vs ${match.awayTeam.name}`;
+        const synced: SyncedTopBet[] = analysis.recommendations
+          .filter((r) => r.value > 0)
+          .sort((a, b) => b.ev - a.ev)
+          .map((r) => ({
+            matchLabel,
+            selection: r.selection,
+            category: r.category,
+            odds: r.odds,
+            winRate: r.winRate,
+            ev: r.ev,
+            value: r.value,
+            stakeConfidence: r.stakeConfidence,
+            stakePct: r.stakePct,
+            stakeLei: r.stakeLei,
+            fragile: r.fragile,
+            risk: r.risk,
+            addedAt: new Date().toISOString(),
+          }));
+        const prev = loadSyncedTopBets().filter((b) => b.matchLabel !== matchLabel);
+        saveSyncedTopBets([...prev, ...synced]);
+      }
     }, 500);
   };
 
