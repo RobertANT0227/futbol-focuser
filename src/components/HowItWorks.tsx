@@ -61,10 +61,10 @@ export function HowItWorks({ steps, result }: Props) {
           </div>
         ) : (
           <div className="space-y-3 text-sm text-secondary-foreground">
-            <p>Analizează un meci mai întâi, apoi apasă din nou pentru a vedea <strong>analiza LIVE pas cu pas</strong> cu explicații AI.</p>
+            <p>Analizează un meci mai întâi, apoi apasă din nou pentru a vedea <strong>analiza LIVE pas cu pas</strong>.</p>
             <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs space-y-1">
               <p>📊 <strong>Pașii analizei:</strong></p>
-              <p>1. Date de intrare → 2. Forță ofensivă/defensivă → 3. Detecție stil (Bus Parking / High Press) → 4. Ajustări → 5. xG final → 6. Poisson → 7. Monte Carlo → 8. Blend → 9. Cornere → 10. Value & Kelly</p>
+              <p>1. Date de intrare → 2. Forță ofensivă/defensivă → 3. Detecție stil → 4. Ajustări → 5. xG final → 6. Probabilități → 7. Cornere → 8. Value & miză</p>
             </div>
           </div>
         )}

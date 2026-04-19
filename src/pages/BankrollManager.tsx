@@ -194,7 +194,7 @@ const BankrollManager = () => {
                 <p><strong className="text-foreground">Winrate</strong> — % pariuri câștigate</p>
                 <p><strong className="text-foreground">ROI</strong> — profit / total mizat × 100</p>
                 <p><strong className="text-foreground">Yield</strong> — profit / stake total × 100</p>
-                <p><strong className="text-foreground">Kelly</strong> — (b×p - q) / b — miză optimă</p>
+                <p><strong className="text-foreground">Stake optim</strong> — miză recomandată calculată din probabilitate și cotă</p>
                 <p><strong className="text-foreground">Edge</strong> — avantaj matematic față de bookmaker</p>
                 <p><strong className="text-foreground">Stake Modifier</strong> — ajustare automată: -25% după 3L, -50% după 5L, +10% după 5W</p>
               </div>
