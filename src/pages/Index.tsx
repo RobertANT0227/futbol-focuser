@@ -171,16 +171,26 @@ const Index = () => {
         <div className="text-center space-y-3">
           {!result ? (
             <>
+              {isClient && (
+                <div className="text-xs text-muted-foreground">
+                  🤖 Analize rămase azi:{' '}
+                  <span className={`font-mono font-bold ${robotBlocked ? 'text-destructive' : 'text-primary'}`}>
+                    {robotRemaining}/{ROBOT_DAILY_LIMIT_CLIENT}
+                  </span>
+                </div>
+              )}
               <Button
                 size="lg"
                 onClick={handleAnalyze}
-                disabled={analyzing}
+                disabled={analyzing || robotBlocked}
                 className="px-12 font-bold"
               >
                 {analyzing ? (
                   <span className="flex items-center gap-2">
                     <span className="animate-pulse-glow">⏳</span> Analizez...
                   </span>
+                ) : robotBlocked ? (
+                  <span className="flex items-center gap-2">🚫 Limită atinsă</span>
                 ) : (
                   <span className="flex items-center gap-2">🔬 Analizează meciul</span>
                 )}
