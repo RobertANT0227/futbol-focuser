@@ -1,6 +1,7 @@
-import { BarChart3, FlaskConical, Home, Flame } from "lucide-react";
+import { BarChart3, FlaskConical, Home, Flame, Settings as SettingsIcon } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useSidebar } from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Sidebar,
   SidebarContent,
@@ -12,18 +13,30 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-const items = [
+type Item = {
+  title: string;
+  url: string;
+  icon: typeof Home;
+  hash?: string;
+  ownerOnly?: boolean;
+};
+
+const allItems: Item[] = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Analiză Meciuri", url: "/", icon: FlaskConical, hash: "#analiza" },
-  { title: "Bankroll Manager", url: "/bankroll", icon: BarChart3 },
-  { title: "Top Bets", url: "/bankroll", icon: Flame, hash: "#top-bets" },
+  { title: "Bankroll Manager", url: "/bankroll", icon: BarChart3, ownerOnly: true },
+  { title: "Top Bets", url: "/bankroll", icon: Flame, hash: "#top-bets", ownerOnly: true },
+  { title: "Settings", url: "/settings", icon: SettingsIcon, ownerOnly: true },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { isOwner, session } = useAuth();
   const collapsed = state === "collapsed";
 
-  // Dedupe by url+hash for active matching
+  if (!session) return null;
+
+  const items = allItems.filter((it) => !it.ownerOnly || isOwner);
   const navItems = items.map((it, idx) => ({ ...it, key: `${it.url}-${it.hash ?? ''}-${idx}` }));
 
   return (
