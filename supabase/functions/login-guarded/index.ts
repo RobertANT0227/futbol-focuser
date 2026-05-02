@@ -54,6 +54,27 @@ Deno.serve(async (req) => {
       isOwner = !!roles?.some((r) => r.role === "owner");
     }
 
+    // Check account_meta: blocked or expired
+    if (profile && !isOwner) {
+      const { data: meta } = await admin
+        .from("account_meta")
+        .select("blocked, blocked_reason, expires_at")
+        .eq("user_id", profile.id)
+        .maybeSingle();
+      if (meta?.blocked) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "blocked", message: meta.blocked_reason || "Cont blocat de administrator." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (meta?.expires_at && new Date(meta.expires_at).getTime() <= Date.now()) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "expired", message: "Contul a expirat. Contactează administratorul." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // Apply rate limit only for non-owner
     if (!isOwner) {
       const cutoff = new Date(Date.now() - LOCKOUT_MINUTES * 60 * 1000).toISOString();

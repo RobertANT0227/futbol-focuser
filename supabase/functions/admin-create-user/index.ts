@@ -11,6 +11,25 @@ function usernameToEmail(username: string): string {
   return `${safe}@local.app`;
 }
 
+function randomString(len: number, alphabet: string): string {
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < len; i++) out += alphabet[bytes[i] % alphabet.length];
+  return out;
+}
+
+function generateUsername(): string {
+  return "client_" + randomString(6, "abcdefghijkmnpqrstuvwxyz23456789");
+}
+
+function generatePassword(): string {
+  // 14 chars, mixed letters + digits + symbols
+  const base = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const sym = "!@#$%&*?";
+  return randomString(12, base) + randomString(2, sym);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -48,9 +67,17 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const username = String(body.username ?? "").trim();
-    const password = String(body.password ?? "");
-    const role = body.role === "owner" ? "owner" : "client";
+    const accountType: "trial" | "premium" =
+      body.account_type === "premium" ? "premium" : "trial";
+    const trialDays = Number.isFinite(body.trial_days) ? Math.max(1, Math.min(365, Number(body.trial_days))) : 7;
+
+    // Hybrid: owner may pass username/password; otherwise auto-generate
+    let username = String(body.username ?? "").trim();
+    let password = String(body.password ?? "");
+    const autoUser = !username;
+    const autoPass = !password;
+    if (autoUser) username = generateUsername();
+    if (autoPass) password = generatePassword();
 
     if (!/^[a-zA-Z0-9_]{3,32}$/.test(username)) {
       return new Response(
@@ -93,9 +120,10 @@ Deno.serve(async (req) => {
       );
     }
 
+    const newUserId = created.user.id;
     const { error: roleErr } = await admin
       .from("user_roles")
-      .insert({ user_id: created.user.id, role });
+      .insert({ user_id: newUserId, role: "client" });
     if (roleErr) {
       return new Response(
         JSON.stringify({ ok: false, error: roleErr.message }),
@@ -103,8 +131,38 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Insert account_meta
+    const expiresAt = accountType === "trial"
+      ? new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+    await admin.from("account_meta").upsert({
+      user_id: newUserId,
+      account_type: accountType,
+      expires_at: expiresAt,
+      blocked: false,
+    });
+
+    // Audit
+    const { data: actorProfile } = await admin
+      .from("profiles").select("username").eq("id", callerId).maybeSingle();
+    await admin.from("admin_audit_log").insert({
+      actor_id: callerId,
+      actor_username: actorProfile?.username ?? null,
+      action: "create_user",
+      target_user_id: newUserId,
+      target_username: username,
+      metadata: { account_type: accountType, expires_at: expiresAt },
+    });
+
     return new Response(
-      JSON.stringify({ ok: true, user_id: created.user.id, username, role }),
+      JSON.stringify({
+        ok: true,
+        user_id: newUserId,
+        username,
+        password, // shown ONCE to owner — never stored in plaintext
+        account_type: accountType,
+        expires_at: expiresAt,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
