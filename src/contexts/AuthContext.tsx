@@ -3,15 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
 export type AppRole = "owner" | "client";
+export type AccountType = "trial" | "premium";
 
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
   username: string | null;
   role: AppRole | null;
+  accountType: AccountType | null;
+  expiresAt: string | null;
   loading: boolean;
   isOwner: boolean;
   isClient: boolean;
+  isPremium: boolean;
+  isTrial: boolean;
   signOut: () => Promise<void>;
   refreshRole: () => Promise<void>;
 }
@@ -23,17 +28,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [accountType, setAccountType] = useState<AccountType | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadProfileAndRole = async (uid: string) => {
-    const [{ data: profile }, { data: roles }] = await Promise.all([
+    const [{ data: profile }, { data: roles }, { data: meta }] = await Promise.all([
       supabase.from("profiles").select("username").eq("id", uid).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", uid),
+      supabase.from("account_meta").select("account_type, expires_at").eq("user_id", uid).maybeSingle(),
     ]);
     setUsername(profile?.username ?? null);
     if (roles?.some((r) => r.role === "owner")) setRole("owner");
     else if (roles?.some((r) => r.role === "client")) setRole("client");
     else setRole(null);
+    setAccountType((meta?.account_type as AccountType) ?? null);
+    setExpiresAt(meta?.expires_at ?? null);
   };
 
   useEffect(() => {
@@ -47,6 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUsername(null);
         setRole(null);
+        setAccountType(null);
+        setExpiresAt(null);
       }
     });
 
@@ -79,9 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         username,
         role,
+        accountType,
+        expiresAt,
         loading,
         isOwner: role === "owner",
         isClient: role === "client",
+        isPremium: role === "owner" || accountType === "premium",
+        isTrial: role === "client" && accountType === "trial",
         signOut,
         refreshRole,
       }}
