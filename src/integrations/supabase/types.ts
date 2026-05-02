@@ -14,6 +14,69 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_meta: {
+        Row: {
+          account_type: Database["public"]["Enums"]["account_type"]
+          blocked: boolean
+          blocked_reason: string | null
+          created_at: string
+          expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_type?: Database["public"]["Enums"]["account_type"]
+          blocked?: boolean
+          blocked_reason?: string | null
+          created_at?: string
+          expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_type?: Database["public"]["Enums"]["account_type"]
+          blocked?: boolean
+          blocked_reason?: string | null
+          created_at?: string
+          expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_audit_log: {
+        Row: {
+          action: string
+          actor_id: string
+          actor_username: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          target_user_id: string | null
+          target_username: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          actor_username?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          target_user_id?: string | null
+          target_username?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          actor_username?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          target_user_id?: string | null
+          target_username?: string | null
+        }
+        Relationships: []
+      }
       login_attempts: {
         Row: {
           attempted_at: string
@@ -104,8 +167,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_account_active: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      account_type: "trial" | "premium"
       app_role: "owner" | "client"
     }
     CompositeTypes: {
@@ -234,6 +299,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      account_type: ["trial", "premium"],
       app_role: ["owner", "client"],
     },
   },
