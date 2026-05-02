@@ -168,7 +168,7 @@ const Index = () => {
         <div className="text-center space-y-3">
           {!result ? (
             <>
-              {isClient && (
+              {isTrial && (
                 <div className="text-xs text-muted-foreground">
                   🤖 Analize rămase azi:{' '}
                   <span className={`font-mono font-bold ${robotBlocked ? 'text-destructive' : 'text-primary'}`}>
