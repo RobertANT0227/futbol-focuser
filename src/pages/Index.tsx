@@ -15,7 +15,7 @@ import { toast } from '@/hooks/use-toast';
 import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
 const Index = () => {
-  const { user, isOwner, isClient } = useAuth();
+  const { user, isOwner, isTrial } = useAuth();
   const [match, setMatch] = useState<MatchData>(defaultMatch());
   const [plan, setPlan] = useState<UserPlan>(defaultPlan);
   const [planSet, setPlanSet] = useState(false);
@@ -25,14 +25,14 @@ const Index = () => {
   const [savedMatch, setSavedMatch] = useState<MatchData | null>(null);
   const [robotUsedToday, setRobotUsedToday] = useState<number>(0);
 
-  // Load today's robot usage for client
+  // Load today's robot usage for trial
   useEffect(() => {
-    if (!user || !isClient) return;
+    if (!user || !isTrial) return;
     getTodayRobotUsage(user.id).then(setRobotUsedToday);
-  }, [user, isClient]);
+  }, [user, isTrial]);
 
-  const robotRemaining = isClient ? Math.max(0, ROBOT_DAILY_LIMIT_CLIENT - robotUsedToday) : Infinity;
-  const robotBlocked = isClient && robotRemaining <= 0;
+  const robotRemaining = isTrial ? Math.max(0, ROBOT_DAILY_LIMIT_CLIENT - robotUsedToday) : Infinity;
+  const robotBlocked = isTrial && robotRemaining <= 0;
 
   const handleAnalyze = async () => {
     if (robotBlocked) {
@@ -44,8 +44,8 @@ const Index = () => {
       return;
     }
 
-    // Consume quota for client BEFORE analysis
-    if (isClient && user) {
+    // Consume quota for trial BEFORE analysis
+    if (isTrial && user) {
       const ok = await recordRobotUsage(user.id);
       if (!ok) {
         toast({ title: 'Eroare', description: 'Nu s-a putut înregistra utilizarea.', variant: 'destructive' });
