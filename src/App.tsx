@@ -77,7 +77,7 @@ const App = () => (
             <Route
               path="/bankroll"
               element={
-                <ProtectedRoute requireRole="owner">
+                <ProtectedRoute requirePremium>
                   <ShellLayout>
                     <BankrollManager />
                   </ShellLayout>
