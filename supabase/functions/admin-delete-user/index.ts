@@ -61,6 +61,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Audit
+    const { data: actorProfile } = await admin
+      .from("profiles").select("username").eq("id", callerId).maybeSingle();
+    await admin.from("admin_audit_log").insert({
+      actor_id: callerId,
+      actor_username: actorProfile?.username ?? null,
+      action: "delete_user",
+      target_user_id: targetId,
+    });
+
     return new Response(JSON.stringify({ ok: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
