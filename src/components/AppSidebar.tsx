@@ -19,24 +19,29 @@ type Item = {
   icon: typeof Home;
   hash?: string;
   ownerOnly?: boolean;
+  premiumOnly?: boolean;
 };
 
 const allItems: Item[] = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Analiză Meciuri", url: "/", icon: FlaskConical, hash: "#analiza" },
-  { title: "Bankroll Manager", url: "/bankroll", icon: BarChart3, ownerOnly: true },
-  { title: "Top Bets", url: "/bankroll", icon: Flame, hash: "#top-bets", ownerOnly: true },
+  { title: "Bankroll Manager", url: "/bankroll", icon: BarChart3, premiumOnly: true },
+  { title: "Top Bets", url: "/bankroll", icon: Flame, hash: "#top-bets", premiumOnly: true },
   { title: "Settings", url: "/settings", icon: SettingsIcon, ownerOnly: true },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const { isOwner, session } = useAuth();
+  const { isOwner, isPremium, session } = useAuth();
   const collapsed = state === "collapsed";
 
   if (!session) return null;
 
-  const items = allItems.filter((it) => !it.ownerOnly || isOwner);
+  const items = allItems.filter((it) => {
+    if (it.ownerOnly && !isOwner) return false;
+    if (it.premiumOnly && !isPremium) return false;
+    return true;
+  });
   const navItems = items.map((it, idx) => ({ ...it, key: `${it.url}-${it.hash ?? ''}-${idx}` }));
 
   return (
