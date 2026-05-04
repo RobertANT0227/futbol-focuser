@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound.tsx";
 import BankrollManager from "./pages/BankrollManager.tsx";
 import Auth from "./pages/Auth.tsx";
 import Settings from "./pages/Settings.tsx";
+import CentoPower from "./pages/CentoPower.tsx";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +81,16 @@ const App = () => (
                 <ProtectedRoute requirePremium>
                   <ShellLayout>
                     <BankrollManager />
+                  </ShellLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/cento-power"
+              element={
+                <ProtectedRoute requirePremium>
+                  <ShellLayout>
+                    <CentoPower />
                   </ShellLayout>
                 </ProtectedRoute>
               }
