@@ -1,4 +1,4 @@
-import { BarChart3, FlaskConical, Home, Flame, Settings as SettingsIcon } from "lucide-react";
+import { BarChart3, FlaskConical, Home, Flame, Settings as SettingsIcon, Zap } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,6 +27,7 @@ const allItems: Item[] = [
   { title: "Analiză Meciuri", url: "/", icon: FlaskConical, hash: "#analiza" },
   { title: "Bankroll Manager", url: "/bankroll", icon: BarChart3, premiumOnly: true },
   { title: "Top Bets", url: "/bankroll", icon: Flame, hash: "#top-bets", premiumOnly: true },
+  { title: "Cento Power", url: "/cento-power", icon: Zap, premiumOnly: true },
   { title: "Settings", url: "/settings", icon: SettingsIcon, ownerOnly: true },
 ];
 
