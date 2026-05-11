@@ -1,297 +1,261 @@
-import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Search, Zap, UploadCloud, Database, Activity, Wallet, Star } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import {
-  parseCsvText,
-  rowToTeamStats,
-  buildLeagueFixtures,
-  buildMatchesFromMatchCsv,
-  scanMatches,
-  betsToCsv,
-  addToWatchlist,
-  loadWatchlist,
-  saveWatchlist,
-  type ScannedBet,
-  type ParsedCsv,
-} from '@/lib/csvScanner';
+import { ImportDropzone } from '@/components/cento/ImportDropzone';
+import { DatabaseTree, type DbLeague } from '@/components/cento/DatabaseTree';
+import { ValueBetCard } from '@/components/cento/ValueBetCard';
+import { StickyFilters, type CentoFilters } from '@/components/cento/StickyFilters';
+import { buildValueBets } from '@/lib/cento/valueEngine';
+import type { CpTeam, CpMatch, ValueBet, CpImportResult } from '@/lib/cento/types';
+import { loadBankroll } from '@/lib/bankroll';
 
-type Filters = {
-  wrMin: number;
-  evMin: number;
-  oddsMin: number;
-  oddsMax: number;
-  risk: string;
-  category: string;
-  styleMismatchOnly: boolean;
-};
-
-const initialFilters: Filters = {
-  wrMin: 0, evMin: -100, oddsMin: 1, oddsMax: 20,
-  risk: 'all', category: 'all', styleMismatchOnly: false,
-};
-
-const RISK_COLOR: Record<string, string> = {
-  low: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  medium: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-  high: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+const initialFilters: CentoFilters = {
+  edgeMin: 3, oddsMin: 1.4, oddsMax: 8, risk: 'all', market: 'all', league: 'all',
 };
 
 export default function CentoPower() {
-  const [parsed, setParsed] = useState<ParsedCsv | null>(null);
-  const [leagueName, setLeagueName] = useState('Liga');
-  const [bets, setBets] = useState<ScannedBet[]>([]);
-  const [scanning, setScanning] = useState(false);
-  const [filters, setFilters] = useState<Filters>(initialFilters);
-  const [watch, setWatch] = useState<ScannedBet[]>(loadWatchlist());
+  const { user } = useAuth();
+  const [leagues, setLeagues] = useState<DbLeague[]>([]);
+  const [teams, setTeams] = useState<CpTeam[]>([]);
+  const [matches, setMatches] = useState<CpMatch[]>([]);
+  const [selectedLeague, setSelectedLeague] = useState<string | null>(null);
+  const [filters, setFilters] = useState<CentoFilters>(initialFilters);
+  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState('value');
 
-  const handleFile = async (file: File) => {
-    const text = await file.text();
-    const p = parseCsvText(text);
-    setParsed(p);
-    setBets([]);
-    toast({ title: 'CSV importat', description: `Tip detectat: ${p.type.toUpperCase()} • ${p.rows.length} rânduri • ${Object.keys(p.map).length} coloane mapate` });
+  const reload = useCallback(async () => {
+    if (!user) return;
+    const [{ data: lg }, { data: tm }, { data: mt }] = await Promise.all([
+      supabase.from('cp_leagues').select('id,name,season').order('name'),
+      supabase.from('cp_teams').select('id,league_id,name,playstyle,tags,stats'),
+      supabase.from('cp_matches').select('id,league_id,season,match_date,home,away,stats,odds').order('match_date', { ascending: false }),
+    ]);
+    const teamsByLg = (tm || []).reduce<Record<string, number>>((a, t) => { a[t.league_id] = (a[t.league_id] || 0) + 1; return a; }, {});
+    const matchesByLg = (mt || []).reduce<Record<string, number>>((a, m) => { a[m.league_id] = (a[m.league_id] || 0) + 1; return a; }, {});
+    setLeagues((lg || []).map((l) => ({ ...l, teams: teamsByLg[l.id] || 0, matches: matchesByLg[l.id] || 0 })));
+    setTeams((tm || []) as unknown as CpTeam[]);
+    setMatches((mt || []) as unknown as CpMatch[]);
+  }, [user]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const bankroll = useMemo(() => loadBankroll().current, []);
+
+  // Compute value bets across DB
+  const allBets = useMemo<ValueBet[]>(() => {
+    if (!matches.length || !teams.length) return [];
+    const teamMap = new Map<string, CpTeam>();
+    teams.forEach((t) => teamMap.set(`${t.league_id}::${t.name.toLowerCase()}`, t));
+    const out: ValueBet[] = [];
+    for (const m of matches) {
+      const home = teamMap.get(`${m.league_id}::${m.home.toLowerCase()}`);
+      const away = teamMap.get(`${m.league_id}::${m.away.toLowerCase()}`);
+      if (!home || !away) continue;
+      const lg = leagues.find((l) => l.id === m.league_id);
+      const bets = buildValueBets(m, home, away, {
+        bankroll, edgeMin: 0, kellyFraction: 0.5, maxStakePct: 0.05,
+      });
+      bets.forEach((b) => { b.league = lg ? `${lg.name} · ${lg.season}` : ''; out.push(b); });
+    }
+    return out;
+  }, [matches, teams, leagues, bankroll]);
+
+  const filteredBets = useMemo(() => {
+    return allBets.filter((b) => {
+      if (selectedLeague && !b.league.includes(leagues.find((l) => l.id === selectedLeague)?.name || '____')) return false;
+      if (b.edge < filters.edgeMin) return false;
+      if (b.odds < filters.oddsMin || b.odds > filters.oddsMax) return false;
+      if (filters.risk !== 'all' && b.risk !== filters.risk) return false;
+      if (filters.market !== 'all' && b.category !== filters.market) return false;
+      if (filters.league !== 'all' && !b.league.startsWith(filters.league)) return false;
+      if (search && !`${b.home} ${b.away} ${b.league}`.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    }).sort((a, b) => b.edge - a.edge);
+  }, [allBets, filters, search, selectedLeague, leagues]);
+
+  const leagueNames = useMemo(() => Array.from(new Set(leagues.map((l) => l.name))), [leagues]);
+
+  const handleDeleteLeague = async (id: string) => {
+    if (!confirm('Șterge această ligă și toate datele aferente?')) return;
+    const { error } = await supabase.from('cp_leagues').delete().eq('id', id);
+    if (error) toast({ title: 'Eroare', description: error.message, variant: 'destructive' });
+    else { toast({ title: 'Ligă ștearsă' }); reload(); }
   };
 
-  const handleScan = () => {
-    if (!parsed) return;
-    setScanning(true);
-    setTimeout(() => {
-      try {
-        let matches: { match: import('@/lib/types').MatchData }[] = [];
-        if (parsed.type === 'match') {
-          matches = buildMatchesFromMatchCsv(parsed.rows, parsed.map, leagueName);
-        } else {
-          // league or team — build TeamStats[]
-          const teams = parsed.rows.map((r, i) => rowToTeamStats(r, parsed.map, `Team ${i + 1}`));
-          matches = buildLeagueFixtures(teams, leagueName);
-        }
-        const result = scanMatches(matches);
-        setBets(result);
-        toast({ title: 'Scanare completă', description: `${matches.length} meciuri analizate • ${result.length} pariuri generate` });
-      } catch (e) {
-        toast({ title: 'Eroare', description: String(e), variant: 'destructive' });
-      } finally {
-        setScanning(false);
-      }
-    }, 50);
+  const saveBet = async (bet: ValueBet) => {
+    if (!user) return;
+    await supabase.from('cp_watchlist').insert({ owner_id: user.id, payload: bet as unknown as Record<string, unknown> });
+    toast({ title: 'Salvat în watchlist' });
   };
 
-  const filtered = useMemo(() => {
-    return bets.filter((b) =>
-      b.winRate >= filters.wrMin &&
-      b.ev * 100 >= filters.evMin &&
-      b.odds >= filters.oddsMin && b.odds <= filters.oddsMax &&
-      (filters.risk === 'all' || b.risk === filters.risk) &&
-      (filters.category === 'all' || b.category === filters.category) &&
-      (!filters.styleMismatchOnly || b.styleMismatch),
-    );
-  }, [bets, filters]);
+  const onImportDone = async (_results: CpImportResult[]) => { await reload(); setTab('value'); };
 
-  const tabs = useMemo(() => ({
-    bestValue: [...filtered].sort((a, b) => b.ev - a.ev).slice(0, 50),
-    highWR: [...filtered].sort((a, b) => b.winRate - a.winRate).slice(0, 50),
-    lowRisk: filtered.filter((b) => b.risk === 'low').sort((a, b) => b.winRate - a.winRate).slice(0, 50),
-    mismatch: filtered.filter((b) => b.styleMismatch).sort((a, b) => b.ev - a.ev).slice(0, 50),
-    highEV: filtered.filter((b) => b.ev * 100 >= 10).sort((a, b) => b.ev - a.ev).slice(0, 50),
-  }), [filtered]);
-
-  const exportCsv = () => {
-    const csv = betsToCsv(filtered);
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `cento-${Date.now()}.csv`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportXlsx = () => {
-    const ws = XLSX.utils.json_to_sheet(filtered);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Cento Bets');
-    XLSX.writeFile(wb, `cento-${Date.now()}.xlsx`);
-  };
-
-  const addAllToWatchlist = () => {
-    filtered.forEach(addToWatchlist);
-    setWatch(loadWatchlist());
-    toast({ title: 'Watchlist', description: `${filtered.length} pariuri salvate` });
-  };
+  // KPIs
+  const totalMatches = matches.length;
+  const totalLeagues = leagues.length;
+  const topBets = filteredBets.slice(0, 12);
 
   return (
-    <div className="container max-w-7xl mx-auto px-4 py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">⚡ Cento Power — CSV League Scanner</h1>
-        <p className="text-sm text-muted-foreground">Importă CSV cu statistici sau meciuri și generează automat top bets pe toată liga.</p>
-      </div>
-
-      {/* Upload */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">1. Import CSV</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-3 items-end flex-wrap">
-            <div className="flex-1 min-w-[200px]">
-              <Label className="text-xs">Fișier CSV</Label>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+    <div className="min-h-screen bg-background">
+      {/* Header strip */}
+      <div className="border-b border-border/60 bg-card/30 backdrop-blur">
+        <div className="px-6 py-4 flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center">
+              <Zap className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <Label className="text-xs">Nume ligă</Label>
-              <Input value={leagueName} onChange={(e) => setLeagueName(e.target.value)} className="w-40" />
+              <div className="font-bold text-lg leading-tight">Cento Power</div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Football Intelligence Terminal</div>
             </div>
-            <Button onClick={handleScan} disabled={!parsed || scanning} className="font-bold">
-              {scanning ? '⏳ Scanez...' : '🔬 Scan League'}
-            </Button>
           </div>
+          <div className="flex-1 max-w-md ml-6 relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Caută echipă, ligă, market..."
+              className="pl-9 h-9 bg-background/60"
+            />
+          </div>
+          <div className="hidden md:flex items-center gap-6 text-xs">
+            <KPI label="Ligi" value={totalLeagues} />
+            <KPI label="Meciuri" value={totalMatches} />
+            <KPI label="Value Bets" value={allBets.length} />
+            <KPI label="Bankroll" value={`${bankroll.toFixed(0)} LEI`} />
+          </div>
+        </div>
+      </div>
 
-          {parsed && (
-            <div className="text-xs space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline">Tip: {parsed.type.toUpperCase()}</Badge>
-                <Badge variant="outline">{parsed.rows.length} rânduri</Badge>
-                <Badge variant="outline">{parsed.headers.length} coloane</Badge>
-                <Badge variant="outline">{Object.keys(parsed.map).length} mapate</Badge>
-              </div>
-              <details className="border border-border rounded-md p-2">
-                <summary className="cursor-pointer text-muted-foreground">Coloane detectate ({Object.keys(parsed.map).length})</summary>
-                <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-1 font-mono">
-                  {Object.entries(parsed.map).map(([k, v]) => (
-                    <div key={k}><span className="text-primary">{k}</span> ← {v}</div>
+      <div className="grid grid-cols-12 gap-0">
+        {/* Left rail: Database tree */}
+        <aside className="col-span-12 lg:col-span-3 xl:col-span-2 border-r border-border/60 p-4 min-h-[calc(100vh-72px)] bg-card/20">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-3 flex items-center gap-2">
+            <Database className="h-3 w-3" /> Database
+          </div>
+          <DatabaseTree
+            leagues={leagues}
+            selected={selectedLeague}
+            onSelect={setSelectedLeague}
+            onDelete={handleDeleteLeague}
+          />
+        </aside>
+
+        {/* Main content */}
+        <main className="col-span-12 lg:col-span-9 xl:col-span-10 p-6">
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="bg-card/40 border border-border/40">
+              <TabsTrigger value="value"><Activity className="h-3.5 w-3.5 mr-2" />Value Engine</TabsTrigger>
+              <TabsTrigger value="top"><Star className="h-3.5 w-3.5 mr-2" />Top Today</TabsTrigger>
+              <TabsTrigger value="imports"><UploadCloud className="h-3.5 w-3.5 mr-2" />Imports</TabsTrigger>
+              <TabsTrigger value="bankroll"><Wallet className="h-3.5 w-3.5 mr-2" />Bankroll</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="value" className="mt-4">
+              <StickyFilters filters={filters} setFilters={setFilters} leagues={leagueNames} />
+              {filteredBets.length === 0 ? (
+                <EmptyHint />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {filteredBets.map((b) => (
+                    <ValueBetCard key={`${b.matchId}-${b.market}`} bet={b} onSave={saveBet} />
                   ))}
                 </div>
-              </details>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              )}
+            </TabsContent>
 
-      {bets.length > 0 && (
-        <>
-          {/* Filters */}
-          <Card>
-            <CardHeader><CardTitle className="text-base">2. Filtre</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-                <div><Label className="text-xs">WR min %</Label><Input type="number" value={filters.wrMin} onChange={(e) => setFilters({ ...filters, wrMin: +e.target.value })} /></div>
-                <div><Label className="text-xs">EV min %</Label><Input type="number" value={filters.evMin} onChange={(e) => setFilters({ ...filters, evMin: +e.target.value })} /></div>
-                <div><Label className="text-xs">Odds min</Label><Input type="number" step="0.05" value={filters.oddsMin} onChange={(e) => setFilters({ ...filters, oddsMin: +e.target.value })} /></div>
-                <div><Label className="text-xs">Odds max</Label><Input type="number" step="0.05" value={filters.oddsMax} onChange={(e) => setFilters({ ...filters, oddsMax: +e.target.value })} /></div>
+            <TabsContent value="top" className="mt-4">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <Label className="text-xs">Risk</Label>
-                  <Select value={filters.risk} onValueChange={(v) => setFilters({ ...filters, risk: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Toate</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="text-xs uppercase tracking-widest text-muted-foreground">Top Value Bets</div>
+                  <h2 className="font-bold text-2xl">Today's Best Edges</h2>
                 </div>
-                <div>
-                  <Label className="text-xs">Bet type</Label>
-                  <Select value={filters.category} onValueChange={(v) => setFilters({ ...filters, category: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Toate</SelectItem>
-                      <SelectItem value="goals">Goals</SelectItem>
-                      <SelectItem value="winner">1X2</SelectItem>
-                      <SelectItem value="corners">Corners</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center gap-2 text-xs cursor-pointer">
-                    <input type="checkbox" checked={filters.styleMismatchOnly} onChange={(e) => setFilters({ ...filters, styleMismatchOnly: e.target.checked })} />
-                    Doar style mismatch
-                  </label>
-                </div>
+                <Badge variant="outline" className="border-primary/40 text-primary">Auto-Shortlist</Badge>
               </div>
-              <div className="flex gap-2 mt-3 flex-wrap">
-                <Button size="sm" variant="outline" onClick={exportCsv}>📄 Export CSV</Button>
-                <Button size="sm" variant="outline" onClick={exportXlsx}>📊 Export Excel</Button>
-                <Button size="sm" variant="outline" onClick={addAllToWatchlist}>⭐ Salvează în Watchlist ({filtered.length})</Button>
-                <Button size="sm" variant="ghost" onClick={() => setFilters(initialFilters)}>Reset</Button>
-              </div>
-            </CardContent>
-          </Card>
+              {topBets.length === 0 ? <EmptyHint /> : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {topBets.map((b) => <ValueBetCard key={`${b.matchId}-${b.market}`} bet={b} onSave={saveBet} />)}
+                </div>
+              )}
+            </TabsContent>
 
-          {/* Mass Scanner Tabs */}
-          <Card>
-            <CardHeader><CardTitle className="text-base">3. Mass Scanner — {filtered.length} pariuri</CardTitle></CardHeader>
-            <CardContent>
-              <Tabs defaultValue="bestValue">
-                <TabsList className="flex-wrap h-auto">
-                  <TabsTrigger value="bestValue">💰 Best Value ({tabs.bestValue.length})</TabsTrigger>
-                  <TabsTrigger value="highWR">🎯 Highest WR ({tabs.highWR.length})</TabsTrigger>
-                  <TabsTrigger value="lowRisk">🛡️ Low Risk ({tabs.lowRisk.length})</TabsTrigger>
-                  <TabsTrigger value="mismatch">⚔️ Style Mismatch ({tabs.mismatch.length})</TabsTrigger>
-                  <TabsTrigger value="highEV">🚀 High EV ({tabs.highEV.length})</TabsTrigger>
-                </TabsList>
-                {(['bestValue', 'highWR', 'lowRisk', 'mismatch', 'highEV'] as const).map((k) => (
-                  <TabsContent key={k} value={k}>
-                    <BetTable bets={tabs[k]} />
-                  </TabsContent>
-                ))}
-              </Tabs>
-            </CardContent>
-          </Card>
-        </>
-      )}
+            <TabsContent value="imports" className="mt-4 space-y-4">
+              <ImportDropzone onDone={onImportDone} />
+              <ImportHistory userId={user?.id} />
+            </TabsContent>
 
-      {watch.length > 0 && (
-        <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle className="text-base">⭐ Watchlist ({watch.length})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={() => { saveWatchlist([]); setWatch([]); }}>Golește</Button>
-          </CardHeader>
-          <CardContent><BetTable bets={watch} /></CardContent>
-        </Card>
-      )}
+            <TabsContent value="bankroll" className="mt-4">
+              <Card className="p-6">
+                <div className="text-sm text-muted-foreground">Bankroll curent</div>
+                <div className="font-mono text-3xl font-bold mt-1">{bankroll.toFixed(2)} LEI</div>
+                <div className="text-xs text-muted-foreground mt-2">
+                  Stake-urile sugerate folosesc Half-Kelly cu cap la 5% din bankroll. Configurează detaliile în Bankroll Manager.
+                </div>
+                <Button asChild variant="outline" size="sm" className="mt-4">
+                  <a href="/bankroll">Deschide Bankroll Manager</a>
+                </Button>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </main>
+      </div>
     </div>
   );
 }
 
-function BetTable({ bets }: { bets: ScannedBet[] }) {
-  if (!bets.length) return <p className="text-sm text-muted-foreground py-6 text-center">Niciun pariu.</p>;
+function KPI({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="overflow-auto max-h-[500px]">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Meci</TableHead>
-            <TableHead>Selecție</TableHead>
-            <TableHead className="text-right">Cotă</TableHead>
-            <TableHead className="text-right">WR</TableHead>
-            <TableHead className="text-right">EV</TableHead>
-            <TableHead>Risk</TableHead>
-            <TableHead className="text-right">Stake</TableHead>
-            <TableHead>Flags</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {bets.map((b, i) => (
-            <TableRow key={i}>
-              <TableCell className="text-xs font-mono">{b.matchLabel}</TableCell>
-              <TableCell className="text-xs">{b.selection}</TableCell>
-              <TableCell className="text-right font-mono">{b.odds.toFixed(2)}</TableCell>
-              <TableCell className="text-right font-mono">{b.winRate.toFixed(1)}%</TableCell>
-              <TableCell className={`text-right font-mono ${b.ev > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{(b.ev * 100).toFixed(1)}%</TableCell>
-              <TableCell><Badge className={RISK_COLOR[b.risk]}>{b.risk}</Badge></TableCell>
-              <TableCell className="text-right font-mono text-xs">{b.stakeLei.toFixed(0)} LEI</TableCell>
-              <TableCell className="text-xs">
-                {b.styleMismatch && <Badge variant="outline" className="mr-1">⚔️</Badge>}
-                {b.fragile && <Badge variant="outline" className="text-amber-400">⚠️</Badge>}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="font-mono font-bold text-sm">{value}</div>
     </div>
+  );
+}
+
+function EmptyHint() {
+  return (
+    <Card className="p-12 text-center bg-card/40">
+      <div className="text-base font-semibold mb-1">Niciun value bet detectat</div>
+      <div className="text-sm text-muted-foreground">
+        Importă CSV-uri sau relaxează filtrele (Edge Min, interval cote).
+      </div>
+    </Card>
+  );
+}
+
+function ImportHistory({ userId }: { userId?: string }) {
+  const [rows, setRows] = useState<Array<{ id: string; league_name: string; season: string; file_type: string; rows_imported: number; duplicates: number; created_at: string; file_name: string }>>([]);
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from('cp_imports').select('*').order('created_at', { ascending: false }).limit(20).then(({ data }) => {
+      setRows((data || []) as typeof rows);
+    });
+  }, [userId]);
+  if (!rows.length) return null;
+  return (
+    <Card className="p-4">
+      <div className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Importuri recente</div>
+      <div className="space-y-2">
+        {rows.map((r) => (
+          <div key={r.id} className="flex items-center justify-between text-sm border-b border-border/40 pb-2 last:border-0">
+            <div>
+              <div className="font-medium">{r.league_name} <span className="text-muted-foreground font-mono text-xs">· {r.season}</span></div>
+              <div className="text-[11px] text-muted-foreground">{r.file_name} · {r.file_type}</div>
+            </div>
+            <div className="text-right text-xs font-mono">
+              <div>{r.rows_imported} rânduri</div>
+              <div className="text-muted-foreground">{r.duplicates} dup.</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
