@@ -25,9 +25,9 @@ type Item = {
 const allItems: Item[] = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Analiză Meciuri", url: "/", icon: FlaskConical, hash: "#analiza" },
+  { title: "Cento Power", url: "/cento-power", icon: Zap, premiumOnly: true },
   { title: "Bankroll Manager", url: "/bankroll", icon: BarChart3, premiumOnly: true },
   { title: "Top Bets", url: "/bankroll", icon: Flame, hash: "#top-bets", premiumOnly: true },
-  { title: "Cento Power", url: "/cento-power", icon: Zap, premiumOnly: true },
   { title: "Settings", url: "/settings", icon: SettingsIcon, ownerOnly: true },
 ];
 
