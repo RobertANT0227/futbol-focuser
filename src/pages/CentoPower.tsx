@@ -14,7 +14,7 @@ import { ValueBetCard } from '@/components/cento/ValueBetCard';
 import { StickyFilters, type CentoFilters } from '@/components/cento/StickyFilters';
 import { buildValueBets } from '@/lib/cento/valueEngine';
 import type { CpTeam, CpMatch, ValueBet, CpImportResult } from '@/lib/cento/types';
-import { loadBankroll } from '@/lib/bankroll';
+import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
 
 const initialFilters: CentoFilters = {
   edgeMin: 3, oddsMin: 1.4, oddsMax: 8, risk: 'all', market: 'all', league: 'all',
@@ -46,7 +46,7 @@ export default function CentoPower() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const bankroll = useMemo(() => loadBankroll().current, []);
+  const bankroll = useMemo(() => (loadBankrollState() ?? getDefaultBankrollState()).current, []);
 
   // Compute value bets across DB
   const allBets = useMemo<ValueBet[]>(() => {
@@ -91,7 +91,11 @@ export default function CentoPower() {
 
   const saveBet = async (bet: ValueBet) => {
     if (!user) return;
-    await supabase.from('cp_watchlist').insert({ owner_id: user.id, payload: bet as unknown as Record<string, unknown> });
+    await supabase.from('cp_watchlist').insert({
+      owner_id: user.id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      payload: bet as any,
+    });
     toast({ title: 'Salvat în watchlist' });
   };
 
