@@ -46,7 +46,7 @@ export default function CentoPower() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  const bankroll = useMemo(() => (loadBankrollState() ?? getDefaultBankrollState()).current, []);
+  const bankroll = useMemo(() => (loadBankrollState() ?? getDefaultBankrollState()).currentBankroll, []);
 
   // Compute value bets across DB
   const allBets = useMemo<ValueBet[]>(() => {
