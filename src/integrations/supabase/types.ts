@@ -77,6 +77,198 @@ export type Database = {
         }
         Relationships: []
       }
+      cp_imports: {
+        Row: {
+          created_at: string
+          duplicates: number | null
+          file_name: string | null
+          file_type: string | null
+          id: string
+          league_id: string | null
+          league_name: string | null
+          owner_id: string
+          rows_imported: number | null
+          season: string | null
+        }
+        Insert: {
+          created_at?: string
+          duplicates?: number | null
+          file_name?: string | null
+          file_type?: string | null
+          id?: string
+          league_id?: string | null
+          league_name?: string | null
+          owner_id: string
+          rows_imported?: number | null
+          season?: string | null
+        }
+        Update: {
+          created_at?: string
+          duplicates?: number | null
+          file_name?: string | null
+          file_type?: string | null
+          id?: string
+          league_id?: string | null
+          league_name?: string | null
+          owner_id?: string
+          rows_imported?: number | null
+          season?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_imports_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "cp_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cp_leagues: {
+        Row: {
+          country: string | null
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          season: string
+          updated_at: string
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          season?: string
+          updated_at?: string
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          season?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      cp_matches: {
+        Row: {
+          away: string
+          created_at: string
+          home: string
+          id: string
+          league_id: string
+          match_date: string | null
+          odds: Json
+          owner_id: string
+          season: string
+          source_batch_id: string | null
+          stats: Json
+          updated_at: string
+        }
+        Insert: {
+          away: string
+          created_at?: string
+          home: string
+          id?: string
+          league_id: string
+          match_date?: string | null
+          odds?: Json
+          owner_id: string
+          season?: string
+          source_batch_id?: string | null
+          stats?: Json
+          updated_at?: string
+        }
+        Update: {
+          away?: string
+          created_at?: string
+          home?: string
+          id?: string
+          league_id?: string
+          match_date?: string | null
+          odds?: Json
+          owner_id?: string
+          season?: string
+          source_batch_id?: string | null
+          stats?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_matches_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "cp_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cp_teams: {
+        Row: {
+          id: string
+          league_id: string
+          name: string
+          owner_id: string
+          playstyle: string | null
+          stats: Json
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          league_id: string
+          name: string
+          owner_id: string
+          playstyle?: string | null
+          stats?: Json
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          league_id?: string
+          name?: string
+          owner_id?: string
+          playstyle?: string | null
+          stats?: Json
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cp_teams_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "cp_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cp_watchlist: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          payload: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          payload: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       login_attempts: {
         Row: {
           attempted_at: string
@@ -168,6 +360,7 @@ export type Database = {
         Returns: boolean
       }
       is_account_active: { Args: { _user_id: string }; Returns: boolean }
+      is_premium_or_owner: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       account_type: "trial" | "premium"

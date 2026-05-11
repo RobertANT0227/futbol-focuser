@@ -1,116 +1,113 @@
-# CSV League Scanner — Cento Power
+## Cento Power v2 — Professional Football Intelligence Terminal
 
-Construim o pagină nouă `/cento-power` (premium-only) care permite import CSV cu echipe/meciuri dintr-o ligă și generează automat Top Bets pe toată liga.
+Transformăm pagina actuală `/cento-power` într-un terminal premium multi-league, persistent, cu motor de value betting și bankroll integration. Restul aplicației (Dashboard, Bankroll Manager, Admin) rămâne neschimbat.
 
-## 1. Pagină nouă `src/pages/CentoPower.tsx`
+---
 
-Acces: doar `isPremium` (owner + premium). Trial/client primesc redirect.
+### 1. Persistență multi-league (Lovable Cloud)
 
-Structură:
-- **Upload zone** — drop / select CSV. Detect tip automat: League / Team / H2H / Match.
-- **Preview & Mapping** — tabel cu primele 10 rânduri + coloane recunoscute; user poate corecta maparea manual.
-- **Scan button** — rulează engine pe toate meciurile/perechile.
-- **Mass Scanner Dashboard** — taburi: Best Value, Highest WR, Best Low Risk, Playstyle Mismatch, High EV.
-- **Filters bar** — WR, EV, Odds (min/max), Risk, Playstyle, League, Bet Type.
-- **Export** — CSV / Excel / Save to Watchlist (localStorage).
+Tabele noi (RLS: doar `owner` + `premium`):
 
-## 2. CSV parsing & auto-mapping (`src/lib/csvScanner.ts`)
+- `cp_leagues` — `id, name, country, season, created_at, owner_id`
+- `cp_teams` — `id, league_id, name, playstyle, stats jsonb, updated_at` (unique league_id+name)
+- `cp_matches` — `id, league_id, season, match_date, home, away, stats jsonb, odds jsonb, source_batch_id` (unique key: `league_id+season+match_date+home+away` → upsert, fără duplicate)
+- `cp_imports` — `id, league_id, season, file_type, rows_imported, created_at, owner_id`
+- `cp_watchlist` — `id, owner_id, payload jsonb, created_at`
 
-Folosesc `papaparse` (deja prezent? altfel îl adaug).
+Toate cu RLS: `has_role(auth.uid(),'owner')` SAU `account_type IN ('owner','premium')` via `account_meta`.
 
-Detect tip CSV după coloane:
-- **League CSV**: are `team` + agregate (GF, GA, MP, …)
-- **Team CSV**: un singur rând per echipă cu detalii granulare
-- **H2H CSV**: două coloane echipe + istoric
-- **Match CSV**: home, away, odds, dată
+### 2. Multi-file Upload Engine (`src/lib/cento/importer.ts`)
 
-Dicționar de aliasuri (case-insensitive, fără diacritice):
+- Drag & drop multi-file, parse paralel cu `papaparse`.
+- Detect automat: `league` (din nume fișier sau coloană), `season`, `file_type` (League / Team / H2H / Match) — **fără** a afișa parser logs sau "columns detected".
+- Merge inteligent prin upsert pe unique key. Reîncărcare = update + skip duplicates.
+- UI: progress card minimal ("Imported 3 leagues · 482 matches · 0 duplicates").
 
-```ts
-const COLUMN_ALIASES = {
-  team:           ['team','echipa','club','squad','nume'],
-  goals_scored:   ['gf','goals','goals for','goluri','goluri marcate','scored'],
-  goals_conceded: ['ga','goals against','goluri primite','conceded'],
-  xg:             ['xg','expected goals'],
-  xga:            ['xga','expected goals against'],
-  possession:     ['poss','possession','posesie','%poss'],
-  shots:          ['sh','shots','suturi','total shots'],
-  shots_on_target:['sot','shots on target','shots ot','suturi pe poarta','sh ot'],
-  dangerous_att:  ['da','dangerous attacks','atacuri periculoase'],
-  corners:        ['cr','corners','cornere'],
-  cards:          ['cards','cart','yellow','yc'],
-  fouls:          ['fouls','faulturi'],
-  clean_sheets:   ['cs','clean sheets','meciuri fara gol primit'],
-  btts:           ['btts','both teams to score'],
-  matches_played: ['mp','games','meciuri','played'],
-};
-```
+### 3. CSV Understanding Engine (extins)
 
-Funcție `autoMapColumns(headers) → { canonical: rawHeader }`.
+Extind `COLUMN_ALIASES` din `src/lib/csvScanner.ts` cu: xG, xGA, possession, shots, SOT, shots off, fouls, corners, cards, BTTS%, Over/Under %, HT stats, clean sheets, scoring/conceding timing, home/away splits, PPG, league position, form, dangerous attacks, attacking/defensive intensity. Normalizare automată %, virgule, totaluri vs per-meci.
 
-Normalize: convert `%`, virgule decimale, "65.4%" → 0.654.
+### 4. Auto Playstyle Engine (`src/lib/cento/playstyle.ts`)
 
-## 3. Engine integration
-
-Pentru fiecare echipă din CSV produc un `TeamStats` (din `src/lib/types.ts`) folosind valorile detectate; câmpurile lipsă primesc default-uri rezonabile (medii lige).
-
-Pentru a genera bets pe toată liga:
-- **Mode A (League CSV)**: produc toate perechile home/away realiste din runda curentă (dacă există coloane fixture) sau toate combinațiile relevante (top × top etc.).
-- **Mode B (Match CSV)**: pentru fiecare rând rulez `runAnalysis` cu cotele din CSV.
-
-Pentru fiecare meci → rulez `runAnalysis()` existent (păstrăm 70/30 Poisson/MC + Kelly). Extrag `bestBet` și recommendations cu `value > 0`.
-
-## 4. Mass Scanner & filtre
-
-Result list = `ScannedBet[]` cu: matchLabel, league, selection, category (Goals/1X2/Corners), odds, WR, EV, risk, playstyle home/away, stakePct.
-
-Filtre derivate din state:
-```ts
-{ wrMin, evMin, oddsMin, oddsMax, risk[], playstyle[], league[], betType[] }
-```
-
-Tab-urile sortează același array filtrat:
-- Best Value → desc EV
-- Highest WR → desc winRate
-- Low Risk → risk='low' apoi desc WR
-- Playstyle Mismatch → flag când styles sunt opuse (ex: bus-parking vs high-press)
-- High EV → EV > 10%
-
-## 5. Export
-
-- **CSV** — generare manuală (nu nevoie de lib).
-- **Excel** — `xlsx` (SheetJS).
-- **Watchlist** — `localStorage` key `cento_watchlist`, vizibil în pagină separată / secțiune.
-
-## 6. Sidebar & routing
-
-`src/App.tsx` — adaug ruta `/cento-power` protejată cu `requirePremium`.
-`src/components/AppSidebar.tsx` — item nou "Cento Power" (icon: Radar / Zap), vizibil doar premium.
-
-## 7. Dependențe
-
-- `papaparse` + `@types/papaparse`
-- `xlsx` (SheetJS)
-
-## Detalii tehnice
+Funcție `detectPlaystyles(team)` → returnează tag primary + tag-uri secundare:
 
 ```text
-src/
-  pages/CentoPower.tsx          // UI principal
-  lib/csvScanner.ts             // parse + auto-map + normalize
-  lib/leagueAnalyzer.ts         // build TeamStats[] + run engine în masă
-  components/cento/
-    CsvUploader.tsx
-    ColumnMapper.tsx
-    ScannerFilters.tsx
-    ScannerResults.tsx
-    ExportMenu.tsx
+PRIMARY: possession / pressing / counter / low-block / high-press / bus-parking
+SECONDARY (multi-tag): direct, transition-heavy, wide, def-transition-weak,
+  high-xg-low-conv, low-xg-high-eff, set-piece, card-aggressive, corner-heavy,
+  second-half, fast-starter, late-goal
 ```
 
-Fără modificări de schemă DB. Fără edge functions. Totul rulează client-side.
+Reguli pe baza pragurilor din brief (possession %, dangerous attacks, shots, conversion xG/goals etc.).
 
-## Out of scope (cer confirmare dacă vrei incluse)
+### 5. Smart Analysis & Value Engine (`src/lib/cento/valueEngine.ts`)
 
-- Persistarea scanărilor în DB (acum doar localStorage pentru watchlist).
-- Auto-fetch CSV din site-uri externe (CORS — necesită edge function proxy).
-- Cote live de la bookmaker (folosim doar cotele din CSV-ul Match).
+Pentru fiecare match generat (din Match CSV sau perechi de echipe în aceeași ligă):
+
+- weighted recent form (ultimele 5, decay exp), home/away weighting
+- xG differential, shot quality (SOT/Shots), pace projection
+- variance, confidence score, risk score
+- style matchup detection (mismatch flags)
+- markets: 1X2, O/U 2.5, BTTS, Corners, Cards, HT, Team Totals
+- pentru fiecare market: implied prob, break-even %, model WR, EV, edge
+- afișează doar `WR > BE%` cu `edge ≥ threshold` (configurabil în Filters)
+- alege automat **Best Value Market** per meci
+
+Reutilizează `runAnalysis()` existent dar îl extinde — nu rescriem nucleul Poisson/MC/Kelly.
+
+### 6. UI nou — Cento Power Terminal
+
+Înlocuim conținutul `src/pages/CentoPower.tsx` cu shell de terminal + sub-rute interne (taburi):
+
+- **Imports** — drag&drop multi-file, listă batch-uri recente
+- **Database** — sidebar arborescent League → Season → Teams/Matches; căutare globală (echipe/ligi/markete)
+- **Value Engine** — Top Value Bets Today: cards cu edge bar, WR, EV, confidence bar, risk badge, playstyle clash icon, suggested stake (Kelly adj. la bankroll)
+- **Filters** sticky: WR min, EV min, odds min/max, risk, playstyle, league, market, edge min
+- **Bankroll** mini-widget (link la pagina existentă) cu exposure today, max daily risk, drawdown
+
+Componente noi:
+```
+src/components/cento/
+  ImportDropzone.tsx
+  DatabaseTree.tsx
+  GlobalSearch.tsx
+  ValueBetCard.tsx
+  EdgeBar.tsx · ConfidenceBar.tsx · RiskBadge.tsx · PlaystyleBadge.tsx
+  StickyFilters.tsx
+  TopValueGrid.tsx
+```
+
+Design: dark terminal premium — folosesc tokens semantice (`--background`, `--card`, `--primary`, `--accent`, `--destructive`) + adaug în `index.css` câțiva tokens noi (`--cento-grid`, `--edge-positive`, `--edge-negative`, `--risk-low/med/high`). Fără tabele Excel-like, fără debug text. Heatmap simplu pentru xG via div-grid + opacitate.
+
+### 7. Sidebar & access
+
+Actualizez `AppSidebar.tsx` ordinea: Dashboard, Cento Power, Bankroll, Database (link intern Cento), Settings. Cento rămâne **premium-only** (`requirePremium` deja existent).
+
+### 8. Performanță
+
+- Indexed queries pe `(league_id, season, match_date)`.
+- React Query cache + `staleTime` 5 min.
+- Parsing în Web Worker (`src/lib/cento/parser.worker.ts`) pentru fișiere mari.
+- Filtrare client-side cu `useMemo` peste rezultatul deja indexat.
+
+### 9. Out of scope (cer confirmare după)
+
+- CLV tracking real-time (necesită feed cote live)
+- Auto-fetch CSV din site externe (CORS)
+- Streak analysis avansată cu istorice de pariuri marcate (depinde de Faza 2 — Profit Tracking)
+
+---
+
+### Tehnic — fișiere noi/modificate
+
+```text
+supabase/migrations/<ts>_cento_power_v2.sql      (NEW)
+src/lib/cento/
+  importer.ts · playstyle.ts · valueEngine.ts · search.ts · types.ts   (NEW)
+src/components/cento/...                                                (NEW)
+src/pages/CentoPower.tsx                                                (REWRITE)
+src/lib/csvScanner.ts                                                   (extend aliases)
+src/components/AppSidebar.tsx                                           (reorder)
+```
+
+Fără edge functions noi. Totul client-side + Supabase pentru persistență.
