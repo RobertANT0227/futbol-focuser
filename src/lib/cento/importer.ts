@@ -153,19 +153,24 @@ export async function importCsvFile(file: File, ctx: ImportContext): Promise<CpI
         btts_yes: num(map.odds_btts_yes ? row[map.odds_btts_yes] : undefined),
         btts_no: num(map.odds_btts_no ? row[map.odds_btts_no] : undefined),
       };
-      return home && away ? {
+      return home && away ? ({
         owner_id: ctx.ownerId,
         league_id: leagueRow.id,
         season,
         match_date,
         home, away, stats, odds,
-      } : null;
-    }).filter(Boolean) as Record<string, unknown>[];
+      } as const) : null;
+    }).filter(Boolean) as Array<{
+      owner_id: string; league_id: string; season: string;
+      match_date: string | null; home: string; away: string;
+      stats: Record<string, unknown>; odds: Record<string, unknown>;
+    }>;
 
     if (matches.length) {
       const { error } = await supabase
         .from('cp_matches')
-        .upsert(matches, { onConflict: 'league_id,season,match_date,home,away' });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .upsert(matches as any, { onConflict: 'league_id,season,match_date,home,away' });
       if (error) throw new Error(error.message);
       rowsImported = matches.length;
       duplicates = Math.max(0, rows.length - matches.length);
