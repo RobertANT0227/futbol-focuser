@@ -26,6 +26,34 @@ const initialFilters: CentoFilters = {
   edgeMin: 3, confidenceMin: 45, sampleSizeMin: 4, oddsMin: 1.4, oddsMax: 8, risk: 'all', market: 'all', league: 'all', stakeMode: 'dynamic',
 };
 
+const normalizeTeamAlias = (name: string) => name
+  .toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\b(real|reial|club|deportivo|deportiu|futbol|football|balompie|cf|fc|cd|ca|rcd|de|del|la|el)\b/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const teamAliases = (team: CpTeam) => Array.from(new Set([
+  team.name,
+  String(team.stats?.common_name || ''),
+  String(team.stats?.team_name || ''),
+].map(normalizeTeamAlias).filter(Boolean)));
+
+const findTeam = (leagueId: string, rawName: string, aliasMap: Map<string, CpTeam>) => {
+  const key = `${leagueId}::${normalizeTeamAlias(rawName)}`;
+  const exact = aliasMap.get(key);
+  if (exact) return exact;
+  const wanted = new Set(normalizeTeamAlias(rawName).split(' ').filter(Boolean));
+  for (const [candidateKey, team] of aliasMap) {
+    if (!candidateKey.startsWith(`${leagueId}::`)) continue;
+    const candidate = new Set(candidateKey.split('::')[1].split(' ').filter(Boolean));
+    const overlap = [...wanted].filter((token) => candidate.has(token)).length;
+    if (overlap >= Math.min(2, wanted.size, candidate.size)) return team;
+  }
+  return undefined;
+};
+
 export default function CentoPower() {
   const { user } = useAuth();
   const [leagues, setLeagues] = useState<DbLeague[]>([]);
@@ -59,18 +87,18 @@ export default function CentoPower() {
   const allBets = useMemo<ValueBet[]>(() => {
     if (!matches.length || !teams.length) return [];
     const teamMap = new Map<string, CpTeam>();
-    teams.forEach((t) => teamMap.set(`${t.league_id}::${t.name.toLowerCase()}`, t));
+    teams.forEach((t) => teamAliases(t).forEach((alias) => teamMap.set(`${t.league_id}::${alias}`, t)));
     const out: ValueBet[] = [];
     for (const m of matches) {
-      const home = teamMap.get(`${m.league_id}::${m.home.toLowerCase()}`);
-      const away = teamMap.get(`${m.league_id}::${m.away.toLowerCase()}`);
+      const home = findTeam(m.league_id, m.home, teamMap);
+      const away = findTeam(m.league_id, m.away, teamMap);
       if (!home || !away) continue;
       const lg = leagues.find((l) => l.id === m.league_id);
       const bets = buildValueBets(m, home, away, {
         bankroll,
         edgeMin: 0,
-        kellyFraction: filters.stakeMode === 'flat' ? 0 : filters.stakeMode === 'kelly' ? 0.5 : 0.35,
-        maxStakePct: filters.stakeMode === 'flat' ? 0.02 : filters.stakeMode === 'kelly' ? 0.05 : 0.035,
+        kellyFraction: filters.stakeMode === 'flat' ? 0 : 1,
+        maxStakePct: Number.POSITIVE_INFINITY,
       });
       bets.forEach((b) => { b.league = lg ? `${lg.name} · ${lg.season}` : ''; out.push(b); });
     }
