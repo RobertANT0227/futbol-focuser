@@ -18,8 +18,7 @@ export type MarketKey =
   | 'BTTS_YES' | 'BTTS_NO'
   | 'OVER_2_5' | 'UNDER_2_5'
   | 'OVER_CORNERS_10_5' | 'UNDER_CORNERS_10_5'
-  | 'OVER_CORNERS_11_5' | 'UNDER_CORNERS_11_5'
-  | 'OVER_CORNERS_12_5' | 'UNDER_CORNERS_12_5';
+  | 'OVER_CORNERS_11_5' | 'UNDER_CORNERS_11_5';
 
 export const MARKET_LABEL: Record<MarketKey, string> = {
   '1': 'Home Win', 'X': 'Draw', '2': 'Away Win',
@@ -27,7 +26,6 @@ export const MARKET_LABEL: Record<MarketKey, string> = {
   OVER_2_5: 'Over 2.5', UNDER_2_5: 'Under 2.5',
   OVER_CORNERS_10_5: 'Over 10.5 corners', UNDER_CORNERS_10_5: 'Under 10.5 corners',
   OVER_CORNERS_11_5: 'Over 11.5 corners', UNDER_CORNERS_11_5: 'Under 11.5 corners',
-  OVER_CORNERS_12_5: 'Over 12.5 corners', UNDER_CORNERS_12_5: 'Under 12.5 corners',
 };
 
 export interface MarketProb {
