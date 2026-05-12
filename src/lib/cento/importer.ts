@@ -63,33 +63,92 @@ for (const [k, v] of Object.entries(EXTRA_ALIASES)) {
 
 const REQUIRED_SIGNALS = ['xg', 'xga', 'possession', 'shots', 'shots_on_target', 'corners', 'cards', 'btts_pct', 'over25_pct', 'ppg'];
 
+const cleanCsvHeader = (s: string) => String(s ?? '')
+  .replace(/^\uFEFF/, '')
+  .replace(/\uFEFF/g, '')
+  .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 const normalizeHeader = (s: string) =>
-  s.replace(/^\uFEFF/, '')
+  cleanCsvHeader(s)
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[_\-.]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-// Score-based TEAM detection: tolerant to missing columns.
-const TEAM_SIGNAL_HEADERS = [
-  'team_name', 'common_name',
-  'matches_played', 'wins', 'draws', 'losses', 'points_per_game',
-  'league_position', 'goals_scored', 'goals_conceded', 'goal_difference',
-  'clean_sheets', 'btts_percentage', 'fts_percentage',
-  'corners_per_match_overall', 'cards_per_match_overall',
-  'win_percentage', 'over25_percentage_overall', 'under25_percentage_overall',
-  'goals_scored_per_match_home', 'goals_conceded_per_match_home',
-  'minutes_per_goal_scored', 'minutes_per_goal_conceded',
-];
+const normalizeHeaderKey = (s: string) =>
+  cleanCsvHeader(s)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/%/g, ' percentage ')
+    .replace(/&/g, ' and ')
+    .replace(/[\s\-]+/g, '_')
+    .replace(/[./]+/g, '_')
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
 
-function teamSignalScore(headers: string[]): { matched: string[]; score: number } {
-  const nh = new Set(headers.map((h) => normalizeHeader(h).replace(/\s+/g, '_')));
-  const matched = TEAM_SIGNAL_HEADERS.filter((sig) => {
-    const norm = sig.replace(/_/g, ' ');
-    return nh.has(sig) || nh.has(norm.replace(/\s+/g, '_'));
-  });
-  return { matched, score: matched.length };
+const TEAM_SIGNAL_ALIASES: Record<string, string[]> = {
+  team_name: ['team_name', 'team', 'club', 'squad', 'squad_name', 'common_name'],
+  matches_played: ['matches_played', 'matches', 'played', 'games_played', 'games', 'mp', 'gp'],
+  wins: ['wins', 'won'],
+  draws: ['draws', 'drawn'],
+  losses: ['losses', 'lost'],
+  points_per_game: ['points_per_game', 'ppg', 'points_pg', 'points_per_match'],
+  league_position: ['league_position', 'position', 'rank', 'rk', 'pos'],
+  goals_scored: ['goals_scored', 'goals_for', 'gf', 'scored'],
+  goals_conceded: ['goals_conceded', 'goals_against', 'ga', 'gc', 'conceded'],
+  goal_difference: ['goal_difference', 'goal_diff', 'gd'],
+  clean_sheets: ['clean_sheets', 'clean_sheet', 'cs'],
+  btts_percentage: ['btts_percentage', 'btts_percentage_overall', 'both_teams_to_score_percentage'],
+  fts_percentage: ['fts_percentage', 'failed_to_score_percentage'],
+  corners_per_match: ['corners_per_match', 'corners_per_match_overall', 'corners_pg'],
+  cards_per_match: ['cards_per_match', 'cards_per_match_overall', 'cards_pg'],
+  win_percentage: ['win_percentage', 'wins_percentage', 'win_percent'],
+  over25_percentage: ['over25_percentage', 'over25_percentage_overall', 'over_25_percentage', 'over_2_5_percentage'],
+  under25_percentage: ['under25_percentage', 'under25_percentage_overall', 'under_25_percentage', 'under_2_5_percentage'],
+  goals_scored_per_match: ['goals_scored_per_match', 'goals_per_match_scored', 'goals_scored_pg', 'goals_for_per_match'],
+  goals_conceded_per_match: ['goals_conceded_per_match', 'goals_per_match_conceded', 'goals_conceded_pg', 'goals_against_per_match'],
+};
+
+const MATCH_SIGNAL_ALIASES: Record<string, string[]> = {
+  home: ['team_a_name', 'home_team_name', 'home_name'],
+  away: ['team_b_name', 'away_team_name', 'away_name'],
+  odds_home: ['odds_ft_home_team_win', 'odds_home', 'home_odds'],
+  total_goal_count: ['total_goal_count', 'total_goals'],
+  date: ['date_gmt', 'match_date', 'date'],
+};
+
+const LEAGUE_SIGNAL_ALIASES: Record<string, string[]> = {
+  average_goals_per_match: ['average_goals_per_match', 'avg_goals_per_match', 'goals_per_match'],
+  home_advantage_percentage: ['home_advantage_percentage', 'home_advantage'],
+  total_matches: ['total_matches', 'matches_total'],
+  number_of_clubs: ['number_of_clubs', 'clubs', 'teams_in_league'],
+};
+
+function detectAliases(headers: string[], aliases: Record<string, string[]>) {
+  const normalized = headers.map(normalizeHeaderKey);
+  const headerSet = new Set(normalized);
+  const matched: string[] = [];
+  for (const [canonical, variants] of Object.entries(aliases)) {
+    const normalizedVariants = [canonical, ...variants].map(normalizeHeaderKey);
+    const exact = normalizedVariants.some((v) => headerSet.has(v));
+    const fuzzy = normalizedVariants.some((v) => {
+      const tokens = v.split('_').filter((t) => t.length > 1);
+      return tokens.length >= 2 && normalized.some((h) => tokens.every((t) => h.split('_').includes(t)));
+    });
+    if (exact || fuzzy) matched.push(canonical);
+  }
+  return { matched, normalized };
+}
+
+function teamSignalScore(headers: string[], rowCount = 0): { matched: string[]; score: number; rawScore: number; boost: number; normalizedHeaders: string[]; hasTeamName: boolean } {
+  const { matched, normalized } = detectAliases(headers, TEAM_SIGNAL_ALIASES);
+  const hasTeamName = matched.includes('team_name');
+  const boost = rowCount >= 10 && hasTeamName ? 4 : 0;
+  return { matched, rawScore: matched.length, boost, score: matched.length + boost, normalizedHeaders: normalized, hasTeamName };
 }
 
 export const normalizeLeagueName = (s: string) =>
