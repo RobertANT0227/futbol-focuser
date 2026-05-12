@@ -51,9 +51,10 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
     .maybeSingle();
 
   let leagueId = existing?.id ?? '';
+  const prevStats = (existing?.league_stats && typeof existing.league_stats === 'object') ? existing.league_stats as Record<string, unknown> : {};
   const leagueStatsPayload = bundle.league
-    ? { ...(existing?.league_stats ?? {}), ...bundle.league }
-    : (existing?.league_stats ?? {});
+    ? { ...prevStats, ...bundle.league }
+    : prevStats;
 
   if (!existing) {
     const { data, error } = await supabase
@@ -117,7 +118,7 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
           oddsBttsYes: m.oddsBttsYes, oddsBttsNo: m.oddsBttsNo,
           oddsOver25: m.oddsOver25, oddsUnder25: m.oddsUnder25,
         },
-        stats: m,
+        stats: m as unknown as Record<string, unknown>,
       }));
     if (toInsert.length) {
       const { error } = await supabase.from('cp_matches').insert(toInsert);
@@ -142,14 +143,14 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
     for (const t of bundle.teams) {
       const id = byName.get(normName(t.name));
       if (id) updates.push({ id, stats: t });
-      else inserts.push({ owner_id: userId, league_id: leagueId, name: t.name, stats: t, tags: [] });
+      else inserts.push({ owner_id: userId, league_id: leagueId, name: t.name, stats: t as unknown as Record<string, unknown>, tags: [] });
     }
     if (inserts.length) {
       const { error } = await supabase.from('cp_teams').insert(inserts);
       if (error) throw error;
     }
     for (const u of updates) {
-      await supabase.from('cp_teams').update({ stats: u.stats }).eq('id', u.id);
+      await supabase.from('cp_teams').update({ stats: u.stats as Record<string, unknown> }).eq('id', u.id);
     }
     await supabase
       .from('cp_leagues')
