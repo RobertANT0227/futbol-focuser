@@ -35,17 +35,12 @@ function buildContext(home: TeamProfile | undefined, away: TeamProfile | undefin
   return { earlySeason, positionGap, motivationNote: note };
 }
 
-function gradeFromConfidence(conf: number, edge: number | null, topProb: number): PickGrade {
-  // Tipster-plan: când nu avem cote, evaluăm strict pe probabilitate + confidence.
-  if (edge === null) {
-    if (conf >= 75 && topProb >= 0.6) return 'STRONG';
-    if (conf >= 60 && topProb >= 0.5) return 'MEDIUM';
-    if (conf >= 50 && topProb >= 0.42) return 'RISKY';
-    return 'PASS';
-  }
-  if (conf >= 75 && edge >= 0.08) return 'STRONG';
-  if (conf >= 60 && edge >= 0.04) return 'MEDIUM';
-  if (conf >= 50 && edge >= 0.01) return 'RISKY';
+function gradeFromConfidence(conf: number, topProb: number): PickGrade {
+  // Pick choice se face strict pe planul de tipster (probabilitate + confidence).
+  // Cotele NU contribuie la grade — sunt afișate doar informativ.
+  if (conf >= 75 && topProb >= 0.6) return 'STRONG';
+  if (conf >= 60 && topProb >= 0.5) return 'MEDIUM';
+  if (conf >= 50 && topProb >= 0.42) return 'RISKY';
   return 'PASS';
 }
 
@@ -106,9 +101,7 @@ export function analyzeMatch(
   if (conflicts.length) confidence -= 8 * conflicts.length;
   confidence = Math.max(15, Math.round(confidence));
 
-  const impliedTop = top.odds && top.odds > 1 ? 1 / top.odds : null;
-  const edge = impliedTop !== null ? top.prob - impliedTop : null;
-  const grade = gradeFromConfidence(confidence, edge, top.prob);
+  const grade = gradeFromConfidence(confidence, top.prob);
   const su = stakeUnits(grade, confidence);
 
   const context = buildContext(home, away, league);

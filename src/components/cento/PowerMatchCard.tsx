@@ -54,7 +54,6 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
     if (quality.smallSamplePenalty > 0.15) downgradeReasons.push(`Eșantion mic (${quality.sampleHome}/${quality.sampleAway} meciuri).`);
     if (context.earlySeason) downgradeReasons.push('Început de sezon — modelul tinde spre media ligii.');
     if (conflicts.length) downgradeReasons.push(`Conflict piețe: ${conflicts.join(' ')}`);
-    if (!topMarket.odds) downgradeReasons.push('Fără cote — nu pot confirma value, doar planul de tipster.');
   }
 
   // Build human reason for PASS
@@ -62,12 +61,9 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
   if (grade === 'PASS') {
     const sorted = [...probabilities].sort((x, y) => y.prob - x.prob);
     const dispersion = sorted[0].prob - sorted[1].prob;
-    const impliedTop = sorted[0].odds && sorted[0].odds > 1 ? 1 / sorted[0].odds : null;
-    const edge = impliedTop !== null ? sorted[0].prob - impliedTop : null;
     if (confidence < 50) passReasons.push(`Confidence ${confidence}/100 sub pragul 50.`);
     if (dispersion < 0.04) passReasons.push(`Dispersie pick top doar ${(dispersion * 100).toFixed(1)}% — piețe prea apropiate.`);
-    if (edge !== null && edge < 0.01) passReasons.push(`Edge față de cotă ${(edge * 100).toFixed(1)}% — fără value.`);
-    if (edge === null) passReasons.push('Fără cote pe piața dominantă — evaluat doar pe planul de tipster (probabilitate + confidence).');
+    if (sorted[0].prob < 0.42) passReasons.push(`Probabilitate top doar ${(sorted[0].prob * 100).toFixed(0)}% — sub pragul minim 42%.`);
     if (quality.band === 'Limited') passReasons.push('Acoperire date limitată.');
     if (quality.smallSamplePenalty > 0.2) passReasons.push(`Eșantion mic (${quality.sampleHome}/${quality.sampleAway} meciuri).`);
     if (!homeTeam) passReasons.push(`Nu am găsit profilul echipei "${match.home}" în CSV teams.`);
