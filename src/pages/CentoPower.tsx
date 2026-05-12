@@ -26,6 +26,34 @@ const initialFilters: CentoFilters = {
   edgeMin: 3, confidenceMin: 45, sampleSizeMin: 4, oddsMin: 1.4, oddsMax: 8, risk: 'all', market: 'all', league: 'all', stakeMode: 'dynamic',
 };
 
+const normalizeTeamAlias = (name: string) => name
+  .toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\b(real|reial|club|deportivo|deportiu|futbol|football|balompie|cf|fc|cd|ca|rcd|de|del|la|el)\b/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+const teamAliases = (team: CpTeam) => Array.from(new Set([
+  team.name,
+  String(team.stats?.common_name || ''),
+  String(team.stats?.team_name || ''),
+].map(normalizeTeamAlias).filter(Boolean)));
+
+const findTeam = (leagueId: string, rawName: string, aliasMap: Map<string, CpTeam>) => {
+  const key = `${leagueId}::${normalizeTeamAlias(rawName)}`;
+  const exact = aliasMap.get(key);
+  if (exact) return exact;
+  const wanted = new Set(normalizeTeamAlias(rawName).split(' ').filter(Boolean));
+  for (const [candidateKey, team] of aliasMap) {
+    if (!candidateKey.startsWith(`${leagueId}::`)) continue;
+    const candidate = new Set(candidateKey.split('::')[1].split(' ').filter(Boolean));
+    const overlap = [...wanted].filter((token) => candidate.has(token)).length;
+    if (overlap >= Math.min(2, wanted.size, candidate.size)) return team;
+  }
+  return undefined;
+};
+
 export default function CentoPower() {
   const { user } = useAuth();
   const [leagues, setLeagues] = useState<DbLeague[]>([]);
@@ -35,7 +63,7 @@ export default function CentoPower() {
   const [filters, setFilters] = useState<CentoFilters>(initialFilters);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('value');
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => new Date());
 
   const reload = useCallback(async () => {
     if (!user) return;
@@ -59,18 +87,18 @@ export default function CentoPower() {
   const allBets = useMemo<ValueBet[]>(() => {
     if (!matches.length || !teams.length) return [];
     const teamMap = new Map<string, CpTeam>();
-    teams.forEach((t) => teamMap.set(`${t.league_id}::${t.name.toLowerCase()}`, t));
+    teams.forEach((t) => teamAliases(t).forEach((alias) => teamMap.set(`${t.league_id}::${alias}`, t)));
     const out: ValueBet[] = [];
     for (const m of matches) {
-      const home = teamMap.get(`${m.league_id}::${m.home.toLowerCase()}`);
-      const away = teamMap.get(`${m.league_id}::${m.away.toLowerCase()}`);
+      const home = findTeam(m.league_id, m.home, teamMap);
+      const away = findTeam(m.league_id, m.away, teamMap);
       if (!home || !away) continue;
       const lg = leagues.find((l) => l.id === m.league_id);
       const bets = buildValueBets(m, home, away, {
         bankroll,
-        edgeMin: 0,
-        kellyFraction: filters.stakeMode === 'flat' ? 0 : filters.stakeMode === 'kelly' ? 0.5 : 0.35,
-        maxStakePct: filters.stakeMode === 'flat' ? 0.02 : filters.stakeMode === 'kelly' ? 0.05 : 0.035,
+        edgeMin: -100,
+        kellyFraction: filters.stakeMode === 'flat' ? 0 : 1,
+        maxStakePct: Number.POSITIVE_INFINITY,
       });
       bets.forEach((b) => { b.league = lg ? `${lg.name} · ${lg.season}` : ''; out.push(b); });
     }
@@ -97,6 +125,26 @@ export default function CentoPower() {
       return true;
     }).sort((a, b) => b.edge - a.edge);
   }, [allBets, filters, search, selectedLeague, leagues, selectedDate, matches]);
+
+  const dateBestBets = useMemo(() => {
+    if (!selectedDate) return filteredBets;
+    const iso = format(selectedDate, 'yyyy-MM-dd');
+    const selectedLeagueName = selectedLeague ? leagues.find((l) => l.id === selectedLeague)?.name : undefined;
+    return matches
+      .filter((m) => m.match_date === iso)
+      .flatMap((m) => {
+        const candidates = allBets.filter((b) => {
+          if (b.matchId !== m.id) return false;
+          if (selectedLeagueName && !b.league.includes(selectedLeagueName)) return false;
+          if (filters.market !== 'all' && b.category !== filters.market) return false;
+          if (filters.league !== 'all' && !b.league.startsWith(filters.league)) return false;
+          if (search && !`${b.home} ${b.away} ${b.league}`.toLowerCase().includes(search.toLowerCase())) return false;
+          if (b.odds < filters.oddsMin || b.odds > filters.oddsMax) return false;
+          return true;
+        }).sort((a, b) => b.edge - a.edge);
+        return candidates[0] ? [candidates[0]] : [];
+      });
+  }, [allBets, filteredBets, filters.league, filters.market, filters.oddsMax, filters.oddsMin, leagues, matches, search, selectedDate, selectedLeague]);
 
   const matchesOnDate = useMemo(() => {
     if (!selectedDate) return null;
@@ -128,7 +176,8 @@ export default function CentoPower() {
   // KPIs
   const totalMatches = matches.length;
   const totalLeagues = leagues.length;
-  const topBets = filteredBets.slice(0, 12);
+  const visibleBets = selectedDate ? dateBestBets : filteredBets;
+  const topBets = visibleBets.slice(0, 12);
 
   return (
     <div className="min-h-screen bg-background">
@@ -218,11 +267,11 @@ export default function CentoPower() {
                 )}
               </div>
               <StickyFilters filters={filters} setFilters={setFilters} leagues={leagueNames} />
-              {filteredBets.length === 0 ? (
+              {visibleBets.length === 0 ? (
                 <EmptyHint hasDate={Boolean(selectedDate)} matchesOnDate={matchesOnDate?.length || 0} />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filteredBets.map((b) => (
+                  {visibleBets.map((b) => (
                     <ValueBetCard key={`${b.matchId}-${b.market}`} bet={b} onSave={saveBet} />
                   ))}
                 </div>

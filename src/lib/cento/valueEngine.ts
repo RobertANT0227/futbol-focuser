@@ -8,6 +8,17 @@ function n(v: unknown): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
+function perMatch(value: number | null, matchesPlayed: number | null): number | null {
+  if (value === null) return null;
+  if (matchesPlayed && matchesPlayed > 0 && value > 12) return value / matchesPlayed;
+  return value;
+}
+
+function pct01(value: number | null): number | null {
+  if (value === null) return null;
+  return value > 1 ? value / 100 : value;
+}
+
 /** Track which stats were available and which were missing per team. */
 interface DataReport {
   used: Set<string>;
@@ -53,25 +64,29 @@ function teamLambda(
   const t = team.stats; const o = opp.stats;
   const T = isHome ? 'H' : 'A';
   const O = isHome ? 'A' : 'H';
+  const tMp = n(t.matches_played);
+  const oMp = n(o.matches_played);
+  const tSplitMp = (isHome ? n(t.matches_played_home) : n(t.matches_played_away)) ?? tMp;
+  const oSplitMp = (isHome ? n(o.matches_played_away) : n(o.matches_played_home)) ?? oMp;
 
   // Attack signals (per match)
   const attSignals: number[] = [];
-  const xg = pick(report, T, 'xg', n(t.xg));
+  const xg = pick(report, T, 'xg', n(t.xg) ?? (isHome ? n(t.xg_for_avg_home) : n(t.xg_for_avg_away)) ?? n(t.xg_avg_per_match));
   if (xg !== null) attSignals.push(xg);
-  const splitGS = isHome ? n(t.goals_scored_home) : n(t.goals_scored_away);
-  const gs = pick(report, T, 'goals_scored', splitGS ?? n(t.goals_scored));
+  const splitGS = perMatch(isHome ? n(t.goals_scored_home) : n(t.goals_scored_away), tSplitMp);
+  const gs = pick(report, T, 'goals_scored', (isHome ? n(t.goals_scored_per_match_home) : n(t.goals_scored_per_match_away)) ?? splitGS ?? n(t.goals_scored_per_match) ?? perMatch(n(t.goals_scored), tMp));
   if (gs !== null) attSignals.push(gs);
-  const sot = pick(report, T, 'shots_on_target', isHome ? (n(t.shots_on_target_home as unknown) ?? n(t.shots_on_target)) : (n(t.shots_on_target_away as unknown) ?? n(t.shots_on_target)));
+  const sot = pick(report, T, 'shots_on_target', perMatch(isHome ? (n(t.shots_on_target_home as unknown) ?? n(t.shots_on_target)) : (n(t.shots_on_target_away as unknown) ?? n(t.shots_on_target)), tSplitMp));
   if (sot !== null) attSignals.push(Math.min(2.5, sot * 0.30));
-  const da = pick(report, T, 'dangerous_attacks', n(t.dangerous_attacks));
+  const da = pick(report, T, 'dangerous_attacks', perMatch(n(t.dangerous_attacks), tMp));
   if (da !== null) attSignals.push(Math.min(2.5, da * 0.025));
 
   // Defense signals (opponent allows)
   const defSignals: number[] = [];
-  const xga = pick(report, O, 'xga', n(o.xga));
+  const xga = pick(report, O, 'xga', n(o.xga) ?? (isHome ? n(o.xg_against_avg_away) : n(o.xg_against_avg_home)) ?? n(o.xga_avg_per_match));
   if (xga !== null) defSignals.push(xga);
-  const splitGC = isHome ? n(o.goals_conceded_away) : n(o.goals_conceded_home);
-  const gc = pick(report, O, 'goals_conceded', splitGC ?? n(o.goals_conceded));
+  const splitGC = perMatch(isHome ? n(o.goals_conceded_away) : n(o.goals_conceded_home), oSplitMp);
+  const gc = pick(report, O, 'goals_conceded', (isHome ? n(o.goals_conceded_per_match_away) : n(o.goals_conceded_per_match_home)) ?? splitGC ?? n(o.goals_conceded_per_match) ?? perMatch(n(o.goals_conceded), oMp));
   if (gc !== null) defSignals.push(gc);
 
   if (!attSignals.length && !defSignals.length) return { lambda: null, signalsUsed: 0 };
@@ -127,20 +142,20 @@ export function buildValueBets(
   const odds = match.odds || {};
 
   // Blend Poisson 1X2 with market-derived BTTS/Over rates if present (FootyStats often provides %)
-  const btts_pct_h = n(homeTeam.stats.btts_pct);
-  const btts_pct_a = n(awayTeam.stats.btts_pct);
+  const btts_pct_h = n(homeTeam.stats.btts_pct) ?? n(homeTeam.stats.btts_percentage);
+  const btts_pct_a = n(awayTeam.stats.btts_pct) ?? n(awayTeam.stats.btts_percentage);
   let pBtts = m.pBtts;
   if (btts_pct_h !== null && btts_pct_a !== null) {
     pick(report, 'H', 'btts_pct', btts_pct_h); pick(report, 'A', 'btts_pct', btts_pct_a);
-    const empirical = ((btts_pct_h + btts_pct_a) / 2) / 100;
+    const empirical = (pct01(btts_pct_h)! + pct01(btts_pct_a)!) / 2;
     pBtts = pBtts * 0.6 + empirical * 0.4;
   }
-  const over_h = n(homeTeam.stats.over25_pct);
-  const over_a = n(awayTeam.stats.over25_pct);
+  const over_h = n(homeTeam.stats.over25_pct) ?? n(homeTeam.stats.over25_percentage);
+  const over_a = n(awayTeam.stats.over25_pct) ?? n(awayTeam.stats.over25_percentage);
   let pOver25 = m.pOver25;
   if (over_h !== null && over_a !== null) {
     pick(report, 'H', 'over25_pct', over_h); pick(report, 'A', 'over25_pct', over_a);
-    const empirical = ((over_h + over_a) / 2) / 100;
+    const empirical = (pct01(over_h)! + pct01(over_a)!) / 2;
     pOver25 = pOver25 * 0.6 + empirical * 0.4;
   }
 
@@ -155,8 +170,8 @@ export function buildValueBets(
   ];
 
   // Corners — only if BOTH teams have corner data (no fake fallback)
-  const cph = n(homeTeam.stats.corners);
-  const cpa = n(awayTeam.stats.corners);
+  const cph = n(homeTeam.stats.corners) ?? n(homeTeam.stats.corners_per_match);
+  const cpa = n(awayTeam.stats.corners) ?? n(awayTeam.stats.corners_per_match);
   if (cph !== null && cpa !== null) {
     pick(report, 'H', 'corners', cph); pick(report, 'A', 'corners', cpa);
     const cornersLambda = cph + cpa;
@@ -171,8 +186,8 @@ export function buildValueBets(
   }
 
   // Cards — only if BOTH teams have card data
-  const cdh = n(homeTeam.stats.cards);
-  const cda = n(awayTeam.stats.cards);
+  const cdh = n(homeTeam.stats.cards) ?? n(homeTeam.stats.cards_per_match);
+  const cda = n(awayTeam.stats.cards) ?? n(awayTeam.stats.cards_per_match);
   if (cdh !== null && cda !== null) {
     pick(report, 'H', 'cards', cdh); pick(report, 'A', 'cards', cda);
     const cardsLambda = cdh + cda;
