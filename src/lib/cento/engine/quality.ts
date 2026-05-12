@@ -31,7 +31,7 @@ export function computeQuality(
   const minSample = Math.min(sampleHome, sampleAway);
   const smallSamplePenalty = minSample < 3 ? 0.4 : minSample < 5 ? 0.2 : minSample < 8 ? 0.1 : 0;
   let band: DataQuality['band'] = 'Limited';
-  if (coverage >= 0.85 && smallSamplePenalty < 0.15) band = 'Excellent';
-  else if (coverage >= 0.6) band = 'Good';
+  if (coverage >= 0.78 && smallSamplePenalty <= 0.2) band = 'Excellent';
+  else if (coverage >= 0.55) band = 'Good';
   return { coverage, band, sampleHome, sampleAway, smallSamplePenalty };
 }

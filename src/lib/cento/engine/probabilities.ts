@@ -155,8 +155,8 @@ export function computeCornerMarkets(home: TeamProfile, away: TeamProfile, leagu
     return Math.min(1, Math.max(0, p));
   };
 
-  const lines = [7.5, 8.5, 9.5, 10.5, 11.5, 12.5];
-  let bestLine = 9.5;
+  const lines = [10.5, 11.5, 12.5];
+  let bestLine = 10.5;
   let bestDist = 1;
   let bestOver = 0.5;
   for (const line of lines) {
