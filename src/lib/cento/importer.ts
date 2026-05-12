@@ -126,11 +126,30 @@ const MATCH_SIGNAL_ALIASES: Record<string, string[]> = {
 };
 
 const LEAGUE_SIGNAL_ALIASES: Record<string, string[]> = {
+  name: ['name', 'league_name', 'competition_name'],
+  status: ['status'],
+  format: ['format'],
   average_goals_per_match: ['average_goals_per_match', 'avg_goals_per_match', 'goals_per_match'],
+  average_scored_home_team: ['average_scored_home_team', 'avg_scored_home_team'],
+  average_scored_away_team: ['average_scored_away_team', 'avg_scored_away_team'],
   home_advantage_percentage: ['home_advantage_percentage', 'home_advantage'],
+  home_scored_advantage_percentage: ['home_scored_advantage_percentage'],
+  home_defence_advantage_percentage: ['home_defence_advantage_percentage'],
   total_matches: ['total_matches', 'matches_total'],
+  matches_completed: ['matches_completed', 'completed_matches'],
   number_of_clubs: ['number_of_clubs', 'clubs', 'teams_in_league'],
+  game_week: ['game_week', 'current_game_week'],
+  total_game_week: ['total_game_week', 'total_game_weeks'],
+  progress: ['progress'],
+  prediction_risk: ['prediction_risk', 'prediction risk'],
+  xg_avg_per_match: ['xg_avg_per_match', 'average_xg_per_match'],
 };
+
+const LEAGUE_EXCLUSIVE_HEADERS = new Set([
+  'status', 'format', 'number_of_clubs', 'total_matches', 'matches_completed', 'game_week', 'total_game_week', 'progress',
+  'prediction_risk', 'home_scored_advantage_percentage', 'home_defence_advantage_percentage', 'home_advantage_percentage',
+  'total_corners_for_season', 'total_cards_for_season', 'xg_avg_per_match',
+]);
 
 function detectAliases(headers: string[], aliases: Record<string, string[]>, allowFuzzy = true) {
   const normalizedPairs = headers.map((raw) => ({ raw, key: normalizeHeaderKey(raw) }));
@@ -169,6 +188,8 @@ function detectionDetails(headers: string[], rowCount: number, map: Record<strin
   const matchAliases = detectAliases(headers, MATCH_SIGNAL_ALIASES, false);
   const teamSignals = teamSignalScore(headers, rowCount);
   const leagueAliases = detectAliases(headers, LEAGUE_SIGNAL_ALIASES);
+  const normalizedHeaders = headers.map(normalizeHeaderKey);
+  const leagueExclusiveHits = normalizedHeaders.filter((h) => LEAGUE_EXCLUSIVE_HEADERS.has(h));
   const hasHomeAway = (has('home') && has('away')) || (matchAliases.matched.includes('home') && matchAliases.matched.includes('away'));
   const matchScore = Number(hasHomeAway) * 3
     + Number(has('odds_home') || matchAliases.matched.includes('odds_home'))
@@ -178,13 +199,15 @@ function detectionDetails(headers: string[], rowCount: number, map: Record<strin
     + Number(has('average_goals_per_match'))
     + Number(has('total_matches'))
     + Number(has('number_of_clubs'))
-    + Number(has('prediction_risk'));
+    + Number(has('prediction_risk'))
+    + leagueExclusiveHits.length;
+  const looksLikeLeagueSummary = !hasHomeAway && (leagueExclusiveHits.length >= 2 || (rowCount <= 3 && leagueScore >= 3));
   const scores = {
     MATCHES: Math.min(100, Math.round((matchScore / 6) * 100)),
     TEAMS: Math.min(100, Math.round((teamSignals.score / 10) * 100)),
     LEAGUE: Math.min(100, Math.round((leagueScore / 5) * 100)),
   };
-  return { matchAliases, teamSignals, leagueAliases, hasHomeAway, matchScore, leagueScore, scores };
+  return { matchAliases, teamSignals, leagueAliases, leagueExclusiveHits, looksLikeLeagueSummary, hasHomeAway, matchScore, leagueScore, scores };
 }
 
 export const normalizeLeagueName = (s: string) =>
@@ -218,10 +241,11 @@ function hasHeader(headers: string[], aliases: string[]) {
 
 export function detectFileType(headers: string[], rowCount: number, map: Record<string, string>): CpFileType {
   const has = (k: string) => Boolean(map[k]);
-  const { hasHomeAway, matchScore, teamSignals, leagueScore } = detectionDetails(headers, rowCount, map);
+  const { hasHomeAway, matchScore, teamSignals, leagueScore, looksLikeLeagueSummary } = detectionDetails(headers, rowCount, map);
 
-  // Required priority: MATCHES → TEAMS → LEAGUE.
   if (hasHomeAway && matchScore >= 3) return 'match';
+  // League summary exports have many aggregate columns that look like team stats; protect them before TEAM failsafe.
+  if (looksLikeLeagueSummary) return 'league';
   if (teamSignals.rawScore >= 5 || teamSignals.score >= 5 || (teamSignals.hasTeamName && rowCount >= 10) || (has('team') && teamSignals.rawScore >= 3)) return 'team';
   if (leagueScore >= 2 && !hasHomeAway) return 'league';
   if (hasHeader(headers, ['team_a_name']) && hasHeader(headers, ['team_b_name'])) return 'match';
