@@ -180,20 +180,22 @@ function hasHeader(headers: string[], aliases: string[]) {
   return na.some((a) => nh.includes(a));
 }
 
-export function detectFileType(headers: string[], _rowCount: number, map: Record<string, string>): CpFileType {
+export function detectFileType(headers: string[], rowCount: number, map: Record<string, string>): CpFileType {
   const has = (k: string) => Boolean(map[k]);
-  const matchScore = Number(has('home')) + Number(has('away')) + Number(has('odds_home')) + Number(has('total_goal_count')) + Number(has('match_date'));
-  const leagueScore = Number(has('average_goals_per_match')) + Number(has('total_matches')) + Number(has('number_of_clubs')) + Number(has('prediction_risk'));
+  const matchAliases = detectAliases(headers, MATCH_SIGNAL_ALIASES).matched;
+  const teamSignals = teamSignalScore(headers, rowCount);
+  const leagueAliases = detectAliases(headers, LEAGUE_SIGNAL_ALIASES).matched;
+  const hasHomeAway = (has('home') && has('away')) || (matchAliases.includes('home') && matchAliases.includes('away'));
+  const matchScore = Number(hasHomeAway) * 3 + Number(has('odds_home') || matchAliases.includes('odds_home')) + Number(has('total_goal_count') || matchAliases.includes('total_goal_count')) + Number(has('match_date') || matchAliases.includes('date'));
+  const leagueScore = leagueAliases.length + Number(has('average_goals_per_match')) + Number(has('total_matches')) + Number(has('number_of_clubs')) + Number(has('prediction_risk'));
 
-  if (matchScore >= 2 && has('home') && has('away')) return 'match';
-  // Score-based TEAM detection: 5+ FootyStats team signals → TEAM
-  const teamSignals = teamSignalScore(headers);
-  if (teamSignals.score >= 5 && !has('home') && !has('away')) return 'team';
-  if (leagueScore >= 2 && !has('home') && !has('away') && teamSignals.score < 5) return 'league';
+  // Required priority: MATCHES → TEAMS → LEAGUE.
+  if (hasHomeAway && matchScore >= 3) return 'match';
+  if (teamSignals.rawScore >= 5 || (teamSignals.hasTeamName && rowCount >= 10) || (has('team') && teamSignals.rawScore >= 3)) return 'team';
+  if (leagueScore >= 2 && !hasHomeAway) return 'league';
   if (hasHeader(headers, ['team_a_name']) && hasHeader(headers, ['team_b_name'])) return 'match';
-  if (hasHeader(headers, ['average_goals_per_match']) && hasHeader(headers, ['total_matches'])) return 'league';
-  // Fallback: any team_name + a couple of metrics
-  if (has('team') && teamSignals.score >= 3) return 'team';
+  // Failsafe: official FootyStats team exports must never fall to Unknown when team rows are present.
+  if ((teamSignals.hasTeamName || has('team')) && rowCount >= 4) return 'team';
   return 'unknown';
 }
 
@@ -276,19 +278,26 @@ export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
   const text = await file.text();
   const res = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
   const rows = (res.data || []).filter((r) => Object.values(r).some((v) => v !== '' && v != null));
-  const headers = (res.meta.fields || []).map((h) => h.replace(/^\uFEFF/, '').trim());
+  const headers = (res.meta.fields || []).map(cleanCsvHeader);
   const map = autoMapColumns(headers);
   const detectedType = detectFileType(headers, rows.length, map);
   const identity = extractIdentity(rows, map);
   const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
-  const teamSig = teamSignalScore(headers);
-  const confidence = Math.min(100, Math.round((teamSig.score / 8) * 100));
+  const teamSig = teamSignalScore(headers, rows.length);
+  const matchScore = detectAliases(headers, MATCH_SIGNAL_ALIASES).matched.length;
+  const leagueScore = detectAliases(headers, LEAGUE_SIGNAL_ALIASES).matched.length;
+  const scores = {
+    MATCHES: Math.min(100, Math.round((matchScore / 5) * 100)),
+    TEAMS: Math.min(100, Math.round((teamSig.score / 9) * 100)),
+    LEAGUE: Math.min(100, Math.round((leagueScore / 4) * 100)),
+  };
   console.groupCollapsed(`[CSV DETECT] ${file.name}`);
-  console.log('Detected Type:', detectedType.toUpperCase());
+  console.log('File:', file.name);
+  console.log('Normalized Headers:', teamSig.normalizedHeaders);
+  console.log('Detection Scores:', scores);
   console.log('Matched Team Signals:', teamSig.matched);
-  console.log('Confidence:', `${confidence}%`);
-  console.log('Headers:', headers.length);
+  console.log('FINAL TYPE:', detectedType.toUpperCase());
   console.groupEnd();
   return {
     file, headers, rows, map, detectedType,
