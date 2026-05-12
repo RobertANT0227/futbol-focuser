@@ -1,18 +1,6 @@
 import type { ParsedMatch } from './types';
 import { pickFirst, safeNum, safeStr } from './util';
-
-function toIsoDate(ts: number | null, dateStr: string | null): { iso: string | null; ms: number | null } {
-  if (ts && Number.isFinite(ts)) {
-    const ms = ts > 1e12 ? ts : ts * 1000;
-    const d = new Date(ms);
-    if (!isNaN(d.getTime())) return { iso: d.toISOString().slice(0, 10), ms };
-  }
-  if (dateStr) {
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return { iso: d.toISOString().slice(0, 10), ms: d.getTime() };
-  }
-  return { iso: null, ms: null };
-}
+import { toIsoDate } from './date';
 
 function buildRaw(r: Record<string, unknown>): Record<string, number | string | null> {
   const out: Record<string, number | string | null> = {};
@@ -30,13 +18,13 @@ export function parseMatches(rows: Record<string, unknown>[]): ParsedMatch[] {
     const home = pickFirst(r, ['home_team_name', 'home_team', 'home'], safeStr);
     const away = pickFirst(r, ['away_team_name', 'away_team', 'away'], safeStr);
     if (!home || !away) continue;
-    const ts = pickFirst(r, ['date_unix', 'date_gmt_unix', 'date_unix_kickoff'], safeNum);
-    const dateStr = pickFirst(r, ['date_gmt', 'kickoff_date', 'date'], safeStr);
+    const ts = pickFirst(r, ['timestamp', 'date_unix', 'date_gmt_unix', 'date_unix_kickoff'], safeNum);
+    const dateStr = pickFirst(r, ['date_GMT', 'date_gmt', 'kickoff_date', 'date'], safeStr);
     const { iso, ms } = toIsoDate(ts, dateStr);
     const rawHome = pickFirst(r, ['home_team_goal_count', 'home_goals', 'home_goal_count'], safeNum);
     const rawAway = pickFirst(r, ['away_team_goal_count', 'away_goals', 'away_goal_count'], safeNum);
-    const status = pickFirst(r, ['status'], safeStr);
-    const isIncomplete = status === 'incomplete' || status === 'scheduled' || status === 'suspended' || status === 'canceled';
+    const status = pickFirst(r, ['status'], safeStr)?.toLowerCase();
+    const isIncomplete = status === 'incomplete' || status === 'scheduled' || status === 'suspended' || status === 'canceled' || status === 'postponed';
     const played = !isIncomplete && status === 'complete';
     const homeGoals = played ? rawHome : null;
     const awayGoals = played ? rawAway : null;
