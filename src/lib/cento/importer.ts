@@ -179,24 +179,89 @@ export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
   const map = autoMapColumns(headers);
   const detectedType = detectFileType(headers, rows.length, map);
   const identity = extractIdentity(rows, map);
+  const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
-  return { file, headers, rows, map, detectedType, detectedLeague: identity.leagueName, normalizedLeagueName: identity.normalizedLeagueName, detectedSeason: identity.season, detectedCountry: identity.country, rowCount: rows.length, missingColumns: coverage.missing, coverageScore: coverage.score };
+  return {
+    file, headers, rows, map, detectedType,
+    detectedLeague: identity.leagueName || fileHint.leagueName,
+    normalizedLeagueName: identity.normalizedLeagueName || fileHint.normalizedLeagueName,
+    detectedSeason: identity.season || fileHint.season,
+    detectedCountry: identity.country || fileHint.country,
+    rowCount: rows.length, missingColumns: coverage.missing, coverageScore: coverage.score,
+  };
+}
+
+function identityFromFilename(name: string): { leagueName?: string; normalizedLeagueName?: string; season?: string; country?: string } {
+  const base = name.replace(/\.csv$/i, '').replace(/[_\-]+/g, ' ').toLowerCase();
+  const seasonMatch = base.match(/(20\d{2})\s*(?:to|\/|-|–|—)\s*(20\d{2}|\d{2})/i);
+  let season: string | undefined;
+  if (seasonMatch) {
+    const a = seasonMatch[1];
+    const b = seasonMatch[2].length === 2 ? '20' + seasonMatch[2] : seasonMatch[2];
+    season = `${a}/${b}`;
+  }
+  const noise = /(stats|fixtures|matches|teams?|squads?|league|h2h|footystats|export|download|\(\d+\)|\b20\d{2}\b|\bto\b)/g;
+  const cleaned = base
+    .replace(/(20\d{2})\s*(?:to|\/|-|–|—)\s*(20\d{2}|\d{2})/gi, ' ')
+    .replace(noise, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return { season };
+  const leagueName = toTitle(cleaned);
+  return { leagueName, normalizedLeagueName: normalizeLeagueName(leagueName), season };
+}
+
+function tokens(s: string) { return new Set(s.split(/\s+/).filter(Boolean)); }
+function jaccard(a: Set<string>, b: Set<string>) {
+  const inter = new Set([...a].filter((x) => b.has(x)));
+  const union = new Set([...a, ...b]);
+  return union.size ? inter.size / union.size : 0;
 }
 
 export function groupBundles(peeked: ParsedLeagueCsv[]): LeagueImportPackage[] {
   const resolved = [...peeked];
-  const identities = resolved.filter((p) => p.normalizedLeagueName && p.detectedSeason);
-  const uniqueIdentities = Array.from(new Map(identities.map((p) => [`${p.normalizedLeagueName}::${p.detectedSeason}`, p])).values());
 
-  if (uniqueIdentities.length === 1) {
-    const base = uniqueIdentities[0];
-    for (const p of resolved) {
-      if (!p.normalizedLeagueName) {
-        p.detectedLeague = base.detectedLeague;
-        p.normalizedLeagueName = base.normalizedLeagueName;
-        p.detectedCountry = base.detectedCountry;
+  // Cluster by fuzzy league identity + season, preferring LEAGUE-type CSV as canonical.
+  type Cluster = { canonical: ParsedLeagueCsv; tokens: Set<string>; season?: string; members: ParsedLeagueCsv[] };
+  const clusters: Cluster[] = [];
+  const sortedByPriority = [...resolved].sort((a, b) => {
+    const rank = (t: CpFileType) => (t === 'league' ? 0 : t === 'match' ? 1 : t === 'team' ? 2 : 3);
+    const r = rank(a.detectedType) - rank(b.detectedType);
+    if (r !== 0) return r;
+    return (b.normalizedLeagueName ? 1 : 0) - (a.normalizedLeagueName ? 1 : 0);
+  });
+
+  for (const p of sortedByPriority) {
+    const tname = p.normalizedLeagueName ? tokens(p.normalizedLeagueName) : new Set<string>();
+    let best: { c: Cluster; score: number } | null = null;
+    for (const c of clusters) {
+      const sameSeason = !p.detectedSeason || !c.season || p.detectedSeason === c.season;
+      if (!sameSeason) continue;
+      const score = tname.size && c.tokens.size ? jaccard(tname, c.tokens) : (tname.size === 0 || c.tokens.size === 0 ? 0.5 : 0);
+      if (score >= 0.5 && (!best || score > best.score)) best = { c, score };
+    }
+    if (best) {
+      best.c.members.push(p);
+      // expand cluster vocabulary
+      tname.forEach((t) => best!.c.tokens.add(t));
+      if (!best.c.season && p.detectedSeason) best.c.season = p.detectedSeason;
+    } else {
+      clusters.push({ canonical: p, tokens: new Set(tname), season: p.detectedSeason, members: [p] });
+    }
+  }
+
+  // Backfill identity inside each cluster from the canonical (league-type preferred).
+  for (const c of clusters) {
+    const withIdentity = c.members.find((m) => m.normalizedLeagueName) || c.canonical;
+    const season = c.season || withIdentity.detectedSeason;
+    for (const m of c.members) {
+      if (!m.normalizedLeagueName) {
+        m.detectedLeague = withIdentity.detectedLeague;
+        m.normalizedLeagueName = withIdentity.normalizedLeagueName;
+        m.detectedCountry = m.detectedCountry || withIdentity.detectedCountry;
       }
-      if (!p.detectedSeason) p.detectedSeason = base.detectedSeason;
+      if (!m.detectedSeason) m.detectedSeason = season;
     }
   }
 
