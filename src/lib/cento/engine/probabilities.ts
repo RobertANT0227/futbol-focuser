@@ -129,6 +129,47 @@ export function computeMarketProbs(
   ];
 }
 
+/**
+ * Compute Over/Under corners markets using a Poisson on summed corner expectation.
+ * Picks the line nearest 50/50 in {7.5, 8.5, 9.5, 10.5, 11.5, 12.5}.
+ */
+export function computeCornerMarkets(home: TeamProfile, away: TeamProfile, league: LeagueStats | undefined): MarketProb[] | null {
+  const lgPerMatch = league?.cornersPerMatch ?? null;
+  // expected corners for each side
+  const homeFor = home.cornersForHome ?? home.cornersForAvg;
+  const homeAg = home.cornersAgainstHome ?? home.cornersAgainstAvg;
+  const awayFor = away.cornersForAway ?? away.cornersForAvg;
+  const awayAg = away.cornersAgainstAway ?? away.cornersAgainstAvg;
+  const haveAny = [homeFor, homeAg, awayFor, awayAg].some((v) => typeof v === 'number' && v > 0);
+  if (!haveAny && !lgPerMatch) return null;
+
+  const lgHalf = (lgPerMatch ?? 10) / 2;
+  const eHome = ((homeFor ?? lgHalf) + (awayAg ?? lgHalf)) / 2;
+  const eAway = ((awayFor ?? lgHalf) + (homeAg ?? lgHalf)) / 2;
+  const lambda = Math.max(2, Math.min(18, eHome + eAway));
+
+  // Poisson cumulative for total corners 0..40
+  const probAtLeast = (k: number) => {
+    let p = 0;
+    for (let i = k; i <= 40; i++) p += poisson(lambda, i);
+    return Math.min(1, Math.max(0, p));
+  };
+
+  const lines = [7.5, 8.5, 9.5, 10.5, 11.5, 12.5];
+  let bestLine = 9.5;
+  let bestDist = 1;
+  let bestOver = 0.5;
+  for (const line of lines) {
+    const pOver = probAtLeast(Math.ceil(line));
+    const dist = Math.abs(pOver - 0.5);
+    if (dist < bestDist) { bestDist = dist; bestLine = line; bestOver = pOver; }
+  }
+  return [
+    { key: 'OVER_CORNERS', label: `Over ${bestLine} corners`, prob: bestOver, odds: null },
+    { key: 'UNDER_CORNERS', label: `Under ${bestLine} corners`, prob: 1 - bestOver, odds: null },
+  ];
+}
+
 function validOdds(o: number | null): number | null {
   if (o === null || !Number.isFinite(o)) return null;
   if (o <= 1.01 || o > 50) return null;
