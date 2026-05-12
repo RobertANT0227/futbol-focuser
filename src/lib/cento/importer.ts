@@ -128,14 +128,14 @@ const LEAGUE_SIGNAL_ALIASES: Record<string, string[]> = {
   number_of_clubs: ['number_of_clubs', 'clubs', 'teams_in_league'],
 };
 
-function detectAliases(headers: string[], aliases: Record<string, string[]>) {
+function detectAliases(headers: string[], aliases: Record<string, string[]>, allowFuzzy = true) {
   const normalized = headers.map(normalizeHeaderKey);
   const headerSet = new Set(normalized);
   const matched: string[] = [];
   for (const [canonical, variants] of Object.entries(aliases)) {
     const normalizedVariants = [canonical, ...variants].map(normalizeHeaderKey);
     const exact = normalizedVariants.some((v) => headerSet.has(v));
-    const fuzzy = normalizedVariants.some((v) => {
+    const fuzzy = allowFuzzy && normalizedVariants.some((v) => {
       const tokens = v.split('_').filter((t) => t.length > 1);
       return tokens.length >= 2 && normalized.some((h) => tokens.every((t) => h.split('_').includes(t)));
     });
@@ -182,7 +182,7 @@ function hasHeader(headers: string[], aliases: string[]) {
 
 export function detectFileType(headers: string[], rowCount: number, map: Record<string, string>): CpFileType {
   const has = (k: string) => Boolean(map[k]);
-  const matchAliases = detectAliases(headers, MATCH_SIGNAL_ALIASES).matched;
+  const matchAliases = detectAliases(headers, MATCH_SIGNAL_ALIASES, false).matched;
   const teamSignals = teamSignalScore(headers, rowCount);
   const leagueAliases = detectAliases(headers, LEAGUE_SIGNAL_ALIASES).matched;
   const hasHomeAway = (has('home') && has('away')) || (matchAliases.includes('home') && matchAliases.includes('away'));
@@ -298,7 +298,7 @@ export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
   const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
   const teamSig = teamSignalScore(headers, rows.length);
-  const matchScore = detectAliases(headers, MATCH_SIGNAL_ALIASES).matched.length;
+  const matchScore = detectAliases(headers, MATCH_SIGNAL_ALIASES, false).matched.length;
   const leagueScore = detectAliases(headers, LEAGUE_SIGNAL_ALIASES).matched.length;
   const scores = {
     MATCHES: Math.min(100, Math.round((matchScore / 5) * 100)),
