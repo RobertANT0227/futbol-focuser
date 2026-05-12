@@ -6,7 +6,7 @@ import { toast } from '@/hooks/use-toast';
 import { parseFootyStatsFile, groupFiles, type ParsedFile } from '@/lib/cento/footystats';
 import { persistBundle } from '@/lib/cento/persistence';
 import { useAuth } from '@/contexts/AuthContext';
-import { Upload, FileText, CheckCircle2, X, Loader2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, X, Loader2, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 
@@ -17,33 +17,75 @@ interface FileItem {
   parsing: boolean;
 }
 
-function completeness(obj: Record<string, unknown> | null | undefined): number {
-  if (!obj) return 0;
-  const keys = Object.keys(obj).filter((k) => k !== 'name' && k !== 'home' && k !== 'away');
-  if (!keys.length) return 0;
-  let filled = 0;
-  for (const k of keys) {
-    const v = (obj as any)[k];
-    if (v === null || v === undefined) continue;
-    if (Array.isArray(v) && v.length === 0) continue;
-    if (typeof v === 'number' && Number.isNaN(v)) continue;
-    filled++;
-  }
-  return Math.round((filled / keys.length) * 100);
+type CoverageSpec = { label: string; keys: string[]; requiredRatio?: number };
+type CoverageReport = { pct: number; missing: string[]; present: number; total: number };
+
+const SPECS: Record<'league' | 'matches' | 'teams', CoverageSpec[]> = {
+  league: [
+    { label: 'media goluri ligă', keys: ['goalsPerMatch'] },
+    { label: 'goluri acasă/deplasare ligă', keys: ['homeGoalsAvg', 'awayGoalsAvg'] },
+    { label: 'procente Over 2.5', keys: ['over25Pct'] },
+    { label: 'procente BTTS', keys: ['bttsPct'] },
+    { label: 'procente 1X2 ligă', keys: ['homeWinPct', 'drawPct', 'awayWinPct'] },
+    { label: 'cornere pe meci', keys: ['cornersPerMatch'] },
+    { label: 'xG mediu ligă', keys: ['xgPerMatch'] },
+  ],
+  matches: [
+    { label: 'data meciului', keys: ['date'] },
+    { label: 'echipa gazdă', keys: ['home'] },
+    { label: 'echipa oaspete', keys: ['away'] },
+    { label: 'status incomplete/complete', keys: ['played'] },
+    { label: 'cote 1X2', keys: ['oddsHome', 'oddsDraw', 'oddsAway'] },
+    { label: 'cote Over/Under 2.5', keys: ['oddsOver25', 'oddsUnder25'] },
+    { label: 'cote BTTS', keys: ['oddsBttsYes', 'oddsBttsNo'] },
+    { label: 'xG/PPG prematch gazdă', keys: ['preXgHome', 'preHomeGoalsAvg'] },
+    { label: 'xG/PPG prematch oaspete', keys: ['preXgAway', 'preAwayGoalsAvg'] },
+    { label: 'potențial Over 2.5 prematch', keys: ['preOver25Pct'] },
+    { label: 'potențial BTTS prematch', keys: ['preBttsPct'] },
+  ],
+  teams: [
+    { label: 'meciuri jucate', keys: ['matchesPlayed'] },
+    { label: 'poziție clasament', keys: ['position'] },
+    { label: 'PPG / puncte', keys: ['ppg', 'points'] },
+    { label: 'goluri marcate/primite', keys: ['goalsFor', 'goalsAgainst'] },
+    { label: 'formă / win rate', keys: ['form', 'winPct', 'ppg'] },
+    { label: 'procente Over 2.5', keys: ['over25Pct'] },
+    { label: 'procente BTTS', keys: ['bttsPct'] },
+    { label: 'split acasă goluri', keys: ['homeGFAvg', 'homeGAAvg'] },
+    { label: 'split deplasare goluri', keys: ['awayGFAvg', 'awayGAAvg'] },
+    { label: 'xG for/against', keys: ['xgFor', 'xgAgainst'] },
+  ],
+};
+
+function hasValue(obj: Record<string, unknown>, key: string): boolean {
+  const v = obj[key];
+  if (v === null || v === undefined) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (typeof v === 'string') return v.trim().length > 0;
+  return true;
 }
 
-function fileCoverage(p?: ParsedFile): number {
-  if (!p) return 0;
-  if (p.league) return completeness(p.league as unknown as Record<string, unknown>);
-  if (p.matches?.length) {
-    const sum = p.matches.reduce((a, m) => a + completeness(m as unknown as Record<string, unknown>), 0);
-    return Math.round(sum / p.matches.length);
+function coverageForRecords(kind: 'league' | 'matches' | 'teams', records: Record<string, unknown>[]): CoverageReport {
+  const specs = SPECS[kind];
+  if (!records.length) return { pct: 0, missing: [`lipsește fișierul ${kind}`], present: 0, total: specs.length };
+  let present = 0;
+  const missing: string[] = [];
+  for (const spec of specs) {
+    const completeRows = records.filter((r) => spec.keys.some((k) => hasValue(r, k))).length;
+    const ratio = completeRows / records.length;
+    if (ratio >= (spec.requiredRatio ?? 1)) present++;
+    else missing.push(records.length === 1 ? spec.label : `${spec.label} (${completeRows}/${records.length} rânduri)`);
   }
-  if (p.teams?.length) {
-    const sum = p.teams.reduce((a, t) => a + completeness(t as unknown as Record<string, unknown>), 0);
-    return Math.round(sum / p.teams.length);
-  }
-  return 0;
+  return { pct: Math.round((present / specs.length) * 100), missing, present, total: specs.length };
+}
+
+function fileCoverage(p?: ParsedFile): CoverageReport {
+  if (!p) return { pct: 0, missing: ['fișier neparsat'], present: 0, total: 1 };
+  if (p.league) return coverageForRecords('league', [p.league as unknown as Record<string, unknown>]);
+  if (p.matches?.length) return coverageForRecords('matches', p.matches as unknown as Record<string, unknown>[]);
+  if (p.teams?.length) return coverageForRecords('teams', p.teams as unknown as Record<string, unknown>[]);
+  return { pct: 0, missing: [`nu am găsit rânduri valide în CSV ${p.meta.kind}`], present: 0, total: 1 };
 }
 
 function coverageColor(pct: number): string {
@@ -149,14 +191,20 @@ export function UploadCenter({ onSynced }: { onSynced?: () => void }) {
                 </div>
               </div>
               {it.parsed && (() => {
-                const pct = fileCoverage(it.parsed);
+                const report = fileCoverage(it.parsed);
                 return (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="text-muted-foreground uppercase tracking-widest">Informație disponibilă</span>
-                      <span className={cn('font-mono font-bold', coverageColor(pct))}>{pct}%</span>
+                      <span className={cn('font-mono font-bold', coverageColor(report.pct))}>{report.pct}%</span>
                     </div>
-                    <Progress value={pct} className="h-1.5" />
+                    <Progress value={report.pct} className="h-1.5" />
+                    {report.missing.length > 0 && (
+                      <div className="rounded-md border border-destructive/20 bg-destructive/5 p-2 text-[10px] text-muted-foreground">
+                        <div className="mb-1 flex items-center gap-1 font-bold text-destructive"><AlertTriangle className="h-3 w-3" /> Lipsește pentru 100%</div>
+                        <div>{report.missing.slice(0, 6).join(' · ')}{report.missing.length > 6 ? ` · +${report.missing.length - 6}` : ''}</div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -169,14 +217,10 @@ export function UploadCenter({ onSynced }: { onSynced?: () => void }) {
         <Card className="p-3 bg-card/60 space-y-3">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Grupare automată</div>
           {bundles.map((b, i) => {
-            const lp = b.league ? completeness(b.league as unknown as Record<string, unknown>) : 0;
-            const mp = b.matches?.length
-              ? Math.round(b.matches.reduce((a, m) => a + completeness(m as unknown as Record<string, unknown>), 0) / b.matches.length)
-              : 0;
-            const tp = b.teams?.length
-              ? Math.round(b.teams.reduce((a, t) => a + completeness(t as unknown as Record<string, unknown>), 0) / b.teams.length)
-              : 0;
-            const overall = Math.round((lp + mp + tp) / 3);
+            const leagueReport = coverageForRecords('league', b.league ? [b.league as unknown as Record<string, unknown>] : []);
+            const matchesReport = coverageForRecords('matches', (b.matches ?? []) as unknown as Record<string, unknown>[]);
+            const teamsReport = coverageForRecords('teams', (b.teams ?? []) as unknown as Record<string, unknown>[]);
+            const overall = Math.round((leagueReport.pct + matchesReport.pct + teamsReport.pct) / 3);
             return (
               <div key={i} className="space-y-2 border-t pt-2 first:border-t-0 first:pt-0">
                 <div className="flex items-center justify-between text-xs">
@@ -185,21 +229,31 @@ export function UploadCenter({ onSynced }: { onSynced?: () => void }) {
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[10px]">
                   {[
-                    { label: 'League', pct: lp, present: !!b.league },
-                    { label: 'Matches', pct: mp, present: !!b.matches?.length, count: b.matches?.length },
-                    { label: 'Teams', pct: tp, present: !!b.teams?.length, count: b.teams?.length },
+                    { label: 'League', report: leagueReport, present: !!b.league },
+                    { label: 'Matches', report: matchesReport, present: !!b.matches?.length, count: b.matches?.length },
+                    { label: 'Teams', report: teamsReport, present: !!b.teams?.length, count: b.teams?.length },
                   ].map((s) => (
                     <div key={s.label} className="space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="uppercase tracking-widest text-muted-foreground">{s.label}{s.count ? ` ·${s.count}` : ''}</span>
-                        <span className={cn('font-mono font-bold', s.present ? coverageColor(s.pct) : 'text-muted-foreground/60')}>
-                          {s.present ? `${s.pct}%` : '—'}
+                        <span className={cn('font-mono font-bold', s.present ? coverageColor(s.report.pct) : 'text-muted-foreground/60')}>
+                          {s.present ? `${s.report.pct}%` : '—'}
                         </span>
                       </div>
-                      <Progress value={s.present ? s.pct : 0} className="h-1" />
+                      <Progress value={s.present ? s.report.pct : 0} className="h-1" />
                     </div>
                   ))}
                 </div>
+                {[leagueReport, matchesReport, teamsReport].some((r) => r.missing.length > 0) && (
+                  <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[10px] text-muted-foreground">
+                    <span className="font-bold text-foreground">Lipsuri CSV:</span>{' '}
+                    {[
+                      leagueReport.missing.length ? `League: ${leagueReport.missing.slice(0, 3).join(', ')}` : '',
+                      matchesReport.missing.length ? `Matches: ${matchesReport.missing.slice(0, 4).join(', ')}` : '',
+                      teamsReport.missing.length ? `Teams: ${teamsReport.missing.slice(0, 4).join(', ')}` : '',
+                    ].filter(Boolean).join(' · ')}
+                  </div>
+                )}
               </div>
             );
           })}

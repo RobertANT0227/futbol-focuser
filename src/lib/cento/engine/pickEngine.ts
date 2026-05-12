@@ -64,7 +64,11 @@ export function analyzeMatch(
   const tempo = computeMatchTempo(homeT, awayT, league);
   rh.matchTempo = tempo; ra.matchTempo = tempo;
 
-  const { lambdaHome, lambdaAway, lowSample } = computeLambdas(homeT, awayT, league, rh, ra);
+  let { lambdaHome, lambdaAway, lowSample } = computeLambdas(homeT, awayT, league, rh, ra);
+  const prematchHome = firstFinite(match.preXgHome, match.preHomeGoalsAvg);
+  const prematchAway = firstFinite(match.preXgAway, match.preAwayGoalsAvg);
+  if (prematchHome !== null) lambdaHome = lambdaHome * 0.65 + clampLambda(prematchHome) * 0.35;
+  if (prematchAway !== null) lambdaAway = lambdaAway * 0.65 + clampLambda(prematchAway) * 0.35;
 
   const probs = computeMarketProbs(
     lambdaHome, lambdaAway,
@@ -137,6 +141,17 @@ function emptyTeam(name: string): TeamProfile {
     xgFor: null, xgAgainst: null, xgForHome: null, xgForAway: null, xgAgainstHome: null, xgAgainstAway: null,
     winPct: null, drawPct: null, lossPct: null,
   };
+}
+
+function firstFinite(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value;
+  }
+  return null;
+}
+
+function clampLambda(value: number): number {
+  return Math.max(0.15, Math.min(4.5, value));
 }
 
 function buildExplanation(
