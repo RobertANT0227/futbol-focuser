@@ -191,14 +191,20 @@ export function UploadCenter({ onSynced }: { onSynced?: () => void }) {
                 </div>
               </div>
               {it.parsed && (() => {
-                const pct = fileCoverage(it.parsed);
+                const report = fileCoverage(it.parsed);
                 return (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="text-muted-foreground uppercase tracking-widest">Informație disponibilă</span>
-                      <span className={cn('font-mono font-bold', coverageColor(pct))}>{pct}%</span>
+                      <span className={cn('font-mono font-bold', coverageColor(report.pct))}>{report.pct}%</span>
                     </div>
-                    <Progress value={pct} className="h-1.5" />
+                    <Progress value={report.pct} className="h-1.5" />
+                    {report.missing.length > 0 && (
+                      <div className="rounded-md border border-destructive/20 bg-destructive/5 p-2 text-[10px] text-muted-foreground">
+                        <div className="mb-1 flex items-center gap-1 font-bold text-destructive"><AlertTriangle className="h-3 w-3" /> Lipsește pentru 100%</div>
+                        <div>{report.missing.slice(0, 6).join(' · ')}{report.missing.length > 6 ? ` · +${report.missing.length - 6}` : ''}</div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -211,14 +217,10 @@ export function UploadCenter({ onSynced }: { onSynced?: () => void }) {
         <Card className="p-3 bg-card/60 space-y-3">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Grupare automată</div>
           {bundles.map((b, i) => {
-            const lp = b.league ? completeness(b.league as unknown as Record<string, unknown>) : 0;
-            const mp = b.matches?.length
-              ? Math.round(b.matches.reduce((a, m) => a + completeness(m as unknown as Record<string, unknown>), 0) / b.matches.length)
-              : 0;
-            const tp = b.teams?.length
-              ? Math.round(b.teams.reduce((a, t) => a + completeness(t as unknown as Record<string, unknown>), 0) / b.teams.length)
-              : 0;
-            const overall = Math.round((lp + mp + tp) / 3);
+            const leagueReport = coverageForRecords('league', b.league ? [b.league as unknown as Record<string, unknown>] : []);
+            const matchesReport = coverageForRecords('matches', (b.matches ?? []) as unknown as Record<string, unknown>[]);
+            const teamsReport = coverageForRecords('teams', (b.teams ?? []) as unknown as Record<string, unknown>[]);
+            const overall = Math.round((leagueReport.pct + matchesReport.pct + teamsReport.pct) / 3);
             return (
               <div key={i} className="space-y-2 border-t pt-2 first:border-t-0 first:pt-0">
                 <div className="flex items-center justify-between text-xs">
@@ -227,21 +229,31 @@ export function UploadCenter({ onSynced }: { onSynced?: () => void }) {
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-[10px]">
                   {[
-                    { label: 'League', pct: lp, present: !!b.league },
-                    { label: 'Matches', pct: mp, present: !!b.matches?.length, count: b.matches?.length },
-                    { label: 'Teams', pct: tp, present: !!b.teams?.length, count: b.teams?.length },
+                    { label: 'League', report: leagueReport, present: !!b.league },
+                    { label: 'Matches', report: matchesReport, present: !!b.matches?.length, count: b.matches?.length },
+                    { label: 'Teams', report: teamsReport, present: !!b.teams?.length, count: b.teams?.length },
                   ].map((s) => (
                     <div key={s.label} className="space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="uppercase tracking-widest text-muted-foreground">{s.label}{s.count ? ` ·${s.count}` : ''}</span>
-                        <span className={cn('font-mono font-bold', s.present ? coverageColor(s.pct) : 'text-muted-foreground/60')}>
-                          {s.present ? `${s.pct}%` : '—'}
+                        <span className={cn('font-mono font-bold', s.present ? coverageColor(s.report.pct) : 'text-muted-foreground/60')}>
+                          {s.present ? `${s.report.pct}%` : '—'}
                         </span>
                       </div>
-                      <Progress value={s.present ? s.pct : 0} className="h-1" />
+                      <Progress value={s.present ? s.report.pct : 0} className="h-1" />
                     </div>
                   ))}
                 </div>
+                {[leagueReport, matchesReport, teamsReport].some((r) => r.missing.length > 0) && (
+                  <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[10px] text-muted-foreground">
+                    <span className="font-bold text-foreground">Lipsuri CSV:</span>{' '}
+                    {[
+                      leagueReport.missing.length ? `League: ${leagueReport.missing.slice(0, 3).join(', ')}` : '',
+                      matchesReport.missing.length ? `Matches: ${matchesReport.missing.slice(0, 4).join(', ')}` : '',
+                      teamsReport.missing.length ? `Teams: ${teamsReport.missing.slice(0, 4).join(', ')}` : '',
+                    ].filter(Boolean).join(' · ')}
+                  </div>
+                )}
               </div>
             );
           })}
