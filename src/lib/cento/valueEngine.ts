@@ -1,7 +1,24 @@
 import type { CpMatch, CpTeam, ValueBet, MarketKey } from './types';
 import { detectPlaystyle, styleClash, STYLE_LABEL, type PrimaryStyle } from './playstyle';
 
-const num = (v: unknown, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+/** Strict numeric reader: returns null when value is missing/invalid. NEVER fakes data. */
+function n(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const x = typeof v === 'number' ? v : parseFloat(String(v).replace('%', '').replace(',', '.'));
+  return Number.isFinite(x) ? x : null;
+}
+
+/** Track which stats were available and which were missing per team. */
+interface DataReport {
+  used: Set<string>;
+  missing: Set<string>;
+}
+function pick(report: DataReport, team: 'H' | 'A', key: string, val: number | null): number | null {
+  const tag = `${team}.${key}`;
+  if (val === null) { report.missing.add(tag); return null; }
+  report.used.add(tag);
+  return val;
+}
 
 // Poisson PMF
 function pois(lambda: number, k: number) {
@@ -24,15 +41,59 @@ function poissonMatrix(lh: number, la: number, max = 7) {
   return { pHome, pDraw, pAway, pOver25, pBtts };
 }
 
-function teamLambda(team: CpTeam, opp: CpTeam, isHome: boolean): number {
-  const att = num(team.stats.xg, num(team.stats.goals_scored, 1.3));
-  const def = num(opp.stats.xga, num(opp.stats.goals_conceded, 1.1));
+/**
+ * Compute attack/defense lambdas using ALL available signals — xG, xGA,
+ * goals (overall + home/away splits), shots-on-target, possession, dangerous attacks.
+ * Missing signals are skipped (never replaced with fake values).
+ * Returns null if no signal is available at all.
+ */
+function teamLambda(
+  team: CpTeam, opp: CpTeam, isHome: boolean, report: DataReport,
+): { lambda: number | null; signalsUsed: number } {
+  const t = team.stats; const o = opp.stats;
+  const T = isHome ? 'H' : 'A';
+  const O = isHome ? 'A' : 'H';
+
+  // Attack signals (per match)
+  const attSignals: number[] = [];
+  const xg = pick(report, T, 'xg', n(t.xg));
+  if (xg !== null) attSignals.push(xg);
+  const splitGS = isHome ? n(t.goals_scored_home) : n(t.goals_scored_away);
+  const gs = pick(report, T, 'goals_scored', splitGS ?? n(t.goals_scored));
+  if (gs !== null) attSignals.push(gs);
+  const sot = pick(report, T, 'shots_on_target', isHome ? (n(t.shots_on_target_home as unknown) ?? n(t.shots_on_target)) : (n(t.shots_on_target_away as unknown) ?? n(t.shots_on_target)));
+  if (sot !== null) attSignals.push(Math.min(2.5, sot * 0.30));
+  const da = pick(report, T, 'dangerous_attacks', n(t.dangerous_attacks));
+  if (da !== null) attSignals.push(Math.min(2.5, da * 0.025));
+
+  // Defense signals (opponent allows)
+  const defSignals: number[] = [];
+  const xga = pick(report, O, 'xga', n(o.xga));
+  if (xga !== null) defSignals.push(xga);
+  const splitGC = isHome ? n(o.goals_conceded_away) : n(o.goals_conceded_home);
+  const gc = pick(report, O, 'goals_conceded', splitGC ?? n(o.goals_conceded));
+  if (gc !== null) defSignals.push(gc);
+
+  if (!attSignals.length && !defSignals.length) return { lambda: null, signalsUsed: 0 };
+
+  const att = attSignals.length ? attSignals.reduce((a, b) => a + b, 0) / attSignals.length : null;
+  const def = defSignals.length ? defSignals.reduce((a, b) => a + b, 0) / defSignals.length : null;
+  const base = att !== null && def !== null ? (att + def) / 2 : (att ?? def!);
   const homeBoost = isHome ? 1.12 : 0.92;
-  return Math.max(0.2, ((att + def) / 2) * homeBoost);
+  // Possession nudge (small)
+  let possAdj = 1;
+  const poss = n(t.possession);
+  if (poss !== null) {
+    pick(report, T, 'possession', poss);
+    const p = poss > 1 ? poss : poss * 100;
+    possAdj = 1 + (p - 50) * 0.003; // +/-15% across 0..100
+  }
+  return { lambda: Math.max(0.15, base * homeBoost * possAdj), signalsUsed: attSignals.length + defSignals.length };
 }
 
-function riskFromConfidence(conf: number, edge: number): 'low' | 'medium' | 'high' {
-  if (conf >= 70 && edge >= 5) return 'low';
+function riskFromConfidence(conf: number, edge: number, reliability: 'high'|'medium'|'low'): 'low' | 'medium' | 'high' {
+  if (reliability === 'low') return 'high';
+  if (conf >= 70 && edge >= 5 && reliability === 'high') return 'low';
   if (conf >= 55) return 'medium';
   return 'high';
 }
@@ -50,8 +111,13 @@ export function buildValueBets(
   awayTeam: CpTeam,
   opts: EngineOptions,
 ): ValueBet[] {
-  const lh = teamLambda(homeTeam, awayTeam, true);
-  const la = teamLambda(awayTeam, homeTeam, false);
+  const report: DataReport = { used: new Set(), missing: new Set() };
+  const Lh = teamLambda(homeTeam, awayTeam, true, report);
+  const La = teamLambda(awayTeam, homeTeam, false, report);
+
+  // If we have absolutely no goal/xG signal on either side, abort: no fake data.
+  if (Lh.lambda === null || La.lambda === null) return [];
+  const lh = Lh.lambda, la = La.lambda;
   const m = poissonMatrix(lh, la);
 
   const psH = detectPlaystyle(homeTeam.stats).primary as PrimaryStyle;
@@ -59,36 +125,79 @@ export function buildValueBets(
   const clash = styleClash(psH, psA);
 
   const odds = match.odds || {};
+
+  // Blend Poisson 1X2 with market-derived BTTS/Over rates if present (FootyStats often provides %)
+  const btts_pct_h = n(homeTeam.stats.btts_pct);
+  const btts_pct_a = n(awayTeam.stats.btts_pct);
+  let pBtts = m.pBtts;
+  if (btts_pct_h !== null && btts_pct_a !== null) {
+    pick(report, 'H', 'btts_pct', btts_pct_h); pick(report, 'A', 'btts_pct', btts_pct_a);
+    const empirical = ((btts_pct_h + btts_pct_a) / 2) / 100;
+    pBtts = pBtts * 0.6 + empirical * 0.4;
+  }
+  const over_h = n(homeTeam.stats.over25_pct);
+  const over_a = n(awayTeam.stats.over25_pct);
+  let pOver25 = m.pOver25;
+  if (over_h !== null && over_a !== null) {
+    pick(report, 'H', 'over25_pct', over_h); pick(report, 'A', 'over25_pct', over_a);
+    const empirical = ((over_h + over_a) / 2) / 100;
+    pOver25 = pOver25 * 0.6 + empirical * 0.4;
+  }
+
   const candidates: { market: MarketKey; cat: ValueBet['category']; prob: number; odd?: number }[] = [
     { market: '1', cat: 'winner', prob: m.pHome, odd: odds.home },
     { market: 'X', cat: 'winner', prob: m.pDraw, odd: odds.draw },
     { market: '2', cat: 'winner', prob: m.pAway, odd: odds.away },
-    { market: 'Over 2.5', cat: 'goals', prob: m.pOver25, odd: odds.over25 },
-    { market: 'Under 2.5', cat: 'goals', prob: 1 - m.pOver25, odd: odds.under25 },
-    { market: 'BTTS Yes', cat: 'goals', prob: m.pBtts, odd: odds.btts_yes },
-    { market: 'BTTS No', cat: 'goals', prob: 1 - m.pBtts, odd: odds.btts_no },
+    { market: 'Over 2.5', cat: 'goals', prob: pOver25, odd: odds.over25 },
+    { market: 'Under 2.5', cat: 'goals', prob: 1 - pOver25, odd: odds.under25 },
+    { market: 'BTTS Yes', cat: 'goals', prob: pBtts, odd: odds.btts_yes },
+    { market: 'BTTS No', cat: 'goals', prob: 1 - pBtts, odd: odds.btts_no },
   ];
 
-  // Corners (rough Poisson on combined corners-per-match)
-  const cph = num(homeTeam.stats.corners, 5);
-  const cpa = num(awayTeam.stats.corners, 5);
-  const cornersLambda = cph + cpa;
-  // P(over 9.5) = 1 - CDF(9)
-  let cdf = 0;
-  for (let k = 0; k <= 9; k++) cdf += pois(cornersLambda, k);
-  const pOver95Corners = 1 - cdf;
-  candidates.push({ market: 'Over 9.5 Corners', cat: 'corners', prob: pOver95Corners, odd: odds.over_corners });
-  candidates.push({ market: 'Under 9.5 Corners', cat: 'corners', prob: 1 - pOver95Corners, odd: odds.under_corners });
+  // Corners — only if BOTH teams have corner data (no fake fallback)
+  const cph = n(homeTeam.stats.corners);
+  const cpa = n(awayTeam.stats.corners);
+  if (cph !== null && cpa !== null) {
+    pick(report, 'H', 'corners', cph); pick(report, 'A', 'corners', cpa);
+    const cornersLambda = cph + cpa;
+    let cdf = 0;
+    for (let k = 0; k <= 9; k++) cdf += pois(cornersLambda, k);
+    const pOver95Corners = 1 - cdf;
+    candidates.push({ market: 'Over 9.5 Corners', cat: 'corners', prob: pOver95Corners, odd: odds.over_corners });
+    candidates.push({ market: 'Under 9.5 Corners', cat: 'corners', prob: 1 - pOver95Corners, odd: odds.under_corners });
+  } else {
+    if (cph === null) report.missing.add('H.corners');
+    if (cpa === null) report.missing.add('A.corners');
+  }
 
-  // Cards
-  const cardsLambda = num(homeTeam.stats.cards, 2) + num(awayTeam.stats.cards, 2);
-  let ccdf = 0;
-  for (let k = 0; k <= 4; k++) ccdf += pois(cardsLambda, k);
-  const pOver45Cards = 1 - ccdf;
-  candidates.push({ market: 'Over 4.5 Cards', cat: 'cards', prob: pOver45Cards, odd: odds.over_cards });
-  candidates.push({ market: 'Under 4.5 Cards', cat: 'cards', prob: 1 - pOver45Cards, odd: odds.under_cards });
+  // Cards — only if BOTH teams have card data
+  const cdh = n(homeTeam.stats.cards);
+  const cda = n(awayTeam.stats.cards);
+  if (cdh !== null && cda !== null) {
+    pick(report, 'H', 'cards', cdh); pick(report, 'A', 'cards', cda);
+    const cardsLambda = cdh + cda;
+    let ccdf = 0;
+    for (let k = 0; k <= 4; k++) ccdf += pois(cardsLambda, k);
+    const pOver45Cards = 1 - ccdf;
+    candidates.push({ market: 'Over 4.5 Cards', cat: 'cards', prob: pOver45Cards, odd: odds.over_cards });
+    candidates.push({ market: 'Under 4.5 Cards', cat: 'cards', prob: 1 - pOver45Cards, odd: odds.under_cards });
+  } else {
+    if (cdh === null) report.missing.add('H.cards');
+    if (cda === null) report.missing.add('A.cards');
+  }
+
+  // Data reliability: completeness across the canonical signal set
+  const TRACKED = ['xg','xga','goals_scored','goals_conceded','possession','shots_on_target','corners','cards','dangerous_attacks','btts_pct','over25_pct'];
+  const totalExpected = TRACKED.length * 2; // per team
+  const usedCount = report.used.size;
+  const completeness = Math.min(1, usedCount / totalExpected);
+  const reliability: 'high'|'medium'|'low' =
+    completeness >= 0.55 ? 'high' : completeness >= 0.30 ? 'medium' : 'low';
+  const reliabilityPenalty = reliability === 'high' ? 0 : reliability === 'medium' ? 8 : 18;
 
   const variance = Math.min(1, Math.abs(lh - la) < 0.3 ? 0.7 : 0.4);
+  const variancePlus = reliability === 'low' ? 0.25 : reliability === 'medium' ? 0.1 : 0;
+  const finalVariance = Math.min(1, variance + variancePlus);
   const out: ValueBet[] = [];
 
   for (const c of candidates) {
@@ -103,7 +212,11 @@ export function buildValueBets(
     const b = odd - 1;
     const kelly = Math.max(0, (b * wr - (1 - wr)) / b);
     const stakePct = Math.min(opts.maxStakePct, kelly * opts.kellyFraction);
-    const conf = Math.round(Math.min(100, 40 + edge * 4 + (clash ? 5 : 0) - variance * 10));
+    const rawConf = 40 + edge * 4 + (clash ? 5 : 0) - finalVariance * 10 - reliabilityPenalty;
+    const conf = Math.round(Math.max(0, Math.min(100, rawConf)));
+    // On low reliability, shrink stake further
+    const reliabilityStakeMult = reliability === 'high' ? 1 : reliability === 'medium' ? 0.6 : 0.3;
+    const finalStakePct = stakePct * reliabilityStakeMult;
     out.push({
       matchId: match.id,
       league: '',
@@ -117,13 +230,17 @@ export function buildValueBets(
       ev,
       edge,
       confidence: conf,
-      risk: riskFromConfidence(conf, edge),
-      variance,
+      risk: riskFromConfidence(conf, edge, reliability),
+      variance: finalVariance,
       styleClash: clash,
       homeStyle: STYLE_LABEL[psH],
       awayStyle: STYLE_LABEL[psA],
-      suggestedStakePct: stakePct,
-      suggestedStakeLei: Math.round(stakePct * opts.bankroll),
+      suggestedStakePct: finalStakePct,
+      suggestedStakeLei: Math.round(finalStakePct * opts.bankroll),
+      dataReliability: reliability,
+      dataCompleteness: completeness,
+      missingStats: Array.from(report.missing),
+      usedStats: Array.from(report.used),
     });
   }
 
