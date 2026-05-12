@@ -66,15 +66,17 @@ function teamLambda(
   const O = isHome ? 'A' : 'H';
   const tMp = n(t.matches_played);
   const oMp = n(o.matches_played);
+  const tSplitMp = (isHome ? n(t.matches_played_home) : n(t.matches_played_away)) ?? tMp;
+  const oSplitMp = (isHome ? n(o.matches_played_away) : n(o.matches_played_home)) ?? oMp;
 
   // Attack signals (per match)
   const attSignals: number[] = [];
   const xg = pick(report, T, 'xg', n(t.xg) ?? (isHome ? n(t.xg_for_avg_home) : n(t.xg_for_avg_away)) ?? n(t.xg_avg_per_match));
   if (xg !== null) attSignals.push(xg);
-  const splitGS = perMatch(isHome ? n(t.goals_scored_home) : n(t.goals_scored_away), tMp);
-  const gs = pick(report, T, 'goals_scored', splitGS ?? n(t.goals_scored_per_match) ?? perMatch(n(t.goals_scored), tMp));
+  const splitGS = perMatch(isHome ? n(t.goals_scored_home) : n(t.goals_scored_away), tSplitMp);
+  const gs = pick(report, T, 'goals_scored', (isHome ? n(t.goals_scored_per_match_home) : n(t.goals_scored_per_match_away)) ?? splitGS ?? n(t.goals_scored_per_match) ?? perMatch(n(t.goals_scored), tMp));
   if (gs !== null) attSignals.push(gs);
-  const sot = pick(report, T, 'shots_on_target', perMatch(isHome ? (n(t.shots_on_target_home as unknown) ?? n(t.shots_on_target)) : (n(t.shots_on_target_away as unknown) ?? n(t.shots_on_target)), tMp));
+  const sot = pick(report, T, 'shots_on_target', perMatch(isHome ? (n(t.shots_on_target_home as unknown) ?? n(t.shots_on_target)) : (n(t.shots_on_target_away as unknown) ?? n(t.shots_on_target)), tSplitMp));
   if (sot !== null) attSignals.push(Math.min(2.5, sot * 0.30));
   const da = pick(report, T, 'dangerous_attacks', perMatch(n(t.dangerous_attacks), tMp));
   if (da !== null) attSignals.push(Math.min(2.5, da * 0.025));
@@ -83,8 +85,8 @@ function teamLambda(
   const defSignals: number[] = [];
   const xga = pick(report, O, 'xga', n(o.xga) ?? (isHome ? n(o.xg_against_avg_away) : n(o.xg_against_avg_home)) ?? n(o.xga_avg_per_match));
   if (xga !== null) defSignals.push(xga);
-  const splitGC = perMatch(isHome ? n(o.goals_conceded_away) : n(o.goals_conceded_home), oMp);
-  const gc = pick(report, O, 'goals_conceded', splitGC ?? n(o.goals_conceded_per_match) ?? perMatch(n(o.goals_conceded), oMp));
+  const splitGC = perMatch(isHome ? n(o.goals_conceded_away) : n(o.goals_conceded_home), oSplitMp);
+  const gc = pick(report, O, 'goals_conceded', (isHome ? n(o.goals_conceded_per_match_away) : n(o.goals_conceded_per_match_home)) ?? splitGC ?? n(o.goals_conceded_per_match) ?? perMatch(n(o.goals_conceded), oMp));
   if (gc !== null) defSignals.push(gc);
 
   if (!attSignals.length && !defSignals.length) return { lambda: null, signalsUsed: 0 };
