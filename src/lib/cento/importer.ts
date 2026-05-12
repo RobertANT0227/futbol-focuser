@@ -656,11 +656,19 @@ function removeUndefined<T extends Record<string, unknown>>(obj: T) {
 
 function parseDate(s: string): string | null {
   if (!s) return null;
-  // Try ISO first
-  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const trimmed = String(s).trim();
+  if (!trimmed) return null;
+  // Unix timestamp (seconds or ms)
+  if (/^\d{10,13}$/.test(trimmed)) {
+    const ms = trimmed.length === 10 ? Number(trimmed) * 1000 : Number(trimmed);
+    const d = new Date(ms);
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  }
+  // ISO
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   // dd/mm/yyyy or dd.mm.yyyy
-  const m = s.match(/^(\d{1,2})[./\-](\d{1,2})[./\-](\d{2,4})/);
+  const m = trimmed.match(/^(\d{1,2})[./\-](\d{1,2})[./\-](\d{2,4})/);
   if (m) {
     const dd = m[1].padStart(2, '0');
     const mm = m[2].padStart(2, '0');
@@ -668,5 +676,15 @@ function parseDate(s: string): string | null {
     if (yy.length === 2) yy = '20' + yy;
     return `${yy}-${mm}-${dd}`;
   }
+  // "Aug 15 2025 - 5:00pm" or "Aug 15 2025"
+  const named = trimmed.match(/^([A-Za-z]{3,9})\s+(\d{1,2})[\s,]+(\d{4})/);
+  if (named) {
+    const months: Record<string, string> = { jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',sept:'09',oct:'10',nov:'11',dec:'12' };
+    const mm = months[named[1].slice(0,3).toLowerCase()];
+    if (mm) return `${named[3]}-${mm}-${named[2].padStart(2,'0')}`;
+  }
+  // Last resort: native Date
+  const d = new Date(trimmed);
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
   return null;
 }
