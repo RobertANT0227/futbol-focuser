@@ -368,7 +368,7 @@ export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
   const rows = (res.data || []).filter((r) => Object.values(r).some((v) => v !== '' && v != null));
   const headers = (res.meta.fields || []).map(cleanCsvHeader);
   const map = autoMapColumns(headers);
-  const detectedType = detectFileType(headers, rows.length, map);
+  const detectedType = detectFileType(headers, rows.length, map, file.name);
   const identity = extractIdentity(rows, map);
   const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
