@@ -62,12 +62,28 @@ export function distance(a: string, b: string): number {
 export function fuzzyMatch(query: string, candidates: string[], threshold = 0.35): string | null {
   const q = normalizeTeamName(query);
   if (!candidates.length) return null;
+  const qTokens = q.split(' ').filter(Boolean);
   let best = candidates[0];
   let bestScore = Infinity;
+  // 1) exact / containment / all-tokens-present pass
+  let containmentBest: string | null = null;
+  let containmentLenDiff = Infinity;
   for (const c of candidates) {
     const nc = normalizeTeamName(c);
     if (!nc) continue;
     if (nc === q) return c;
+    const allTokensInCandidate = qTokens.length > 0 && qTokens.every((t) => nc.split(' ').includes(t));
+    const candTokensInQuery = nc.split(' ').filter(Boolean).every((t) => qTokens.includes(t));
+    if (allTokensInCandidate || candTokensInQuery || nc.includes(q) || q.includes(nc)) {
+      const diff = Math.abs(nc.length - q.length);
+      if (diff < containmentLenDiff) { containmentLenDiff = diff; containmentBest = c; }
+    }
+  }
+  if (containmentBest) return containmentBest;
+  // 2) Levenshtein fallback
+  for (const c of candidates) {
+    const nc = normalizeTeamName(c);
+    if (!nc) continue;
     const d = distance(q, nc) / Math.max(q.length, nc.length);
     if (d < bestScore) { bestScore = d; best = c; }
   }
