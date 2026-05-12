@@ -34,7 +34,7 @@ function completeness(obj: Record<string, unknown> | null | undefined): number {
 
 function fileCoverage(p?: ParsedFile): number {
   if (!p) return 0;
-  if (p.league) return completeness(p.league as Record<string, unknown>);
+  if (p.league) return completeness(p.league as unknown as Record<string, unknown>);
   if (p.matches?.length) {
     const sum = p.matches.reduce((a, m) => a + completeness(m as unknown as Record<string, unknown>), 0);
     return Math.round(sum / p.matches.length);
