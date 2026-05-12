@@ -140,20 +140,20 @@ export function buildValueBets(
   const odds = match.odds || {};
 
   // Blend Poisson 1X2 with market-derived BTTS/Over rates if present (FootyStats often provides %)
-  const btts_pct_h = n(homeTeam.stats.btts_pct);
-  const btts_pct_a = n(awayTeam.stats.btts_pct);
+  const btts_pct_h = n(homeTeam.stats.btts_pct) ?? n(homeTeam.stats.btts_percentage);
+  const btts_pct_a = n(awayTeam.stats.btts_pct) ?? n(awayTeam.stats.btts_percentage);
   let pBtts = m.pBtts;
   if (btts_pct_h !== null && btts_pct_a !== null) {
     pick(report, 'H', 'btts_pct', btts_pct_h); pick(report, 'A', 'btts_pct', btts_pct_a);
-    const empirical = ((btts_pct_h + btts_pct_a) / 2) / 100;
+    const empirical = (pct01(btts_pct_h)! + pct01(btts_pct_a)!) / 2;
     pBtts = pBtts * 0.6 + empirical * 0.4;
   }
-  const over_h = n(homeTeam.stats.over25_pct);
-  const over_a = n(awayTeam.stats.over25_pct);
+  const over_h = n(homeTeam.stats.over25_pct) ?? n(homeTeam.stats.over25_percentage);
+  const over_a = n(awayTeam.stats.over25_pct) ?? n(awayTeam.stats.over25_percentage);
   let pOver25 = m.pOver25;
   if (over_h !== null && over_a !== null) {
     pick(report, 'H', 'over25_pct', over_h); pick(report, 'A', 'over25_pct', over_a);
-    const empirical = ((over_h + over_a) / 2) / 100;
+    const empirical = (pct01(over_h)! + pct01(over_a)!) / 2;
     pOver25 = pOver25 * 0.6 + empirical * 0.4;
   }
 
@@ -168,8 +168,8 @@ export function buildValueBets(
   ];
 
   // Corners — only if BOTH teams have corner data (no fake fallback)
-  const cph = n(homeTeam.stats.corners);
-  const cpa = n(awayTeam.stats.corners);
+  const cph = n(homeTeam.stats.corners) ?? n(homeTeam.stats.corners_per_match);
+  const cpa = n(awayTeam.stats.corners) ?? n(awayTeam.stats.corners_per_match);
   if (cph !== null && cpa !== null) {
     pick(report, 'H', 'corners', cph); pick(report, 'A', 'corners', cpa);
     const cornersLambda = cph + cpa;
@@ -184,8 +184,8 @@ export function buildValueBets(
   }
 
   // Cards — only if BOTH teams have card data
-  const cdh = n(homeTeam.stats.cards);
-  const cda = n(awayTeam.stats.cards);
+  const cdh = n(homeTeam.stats.cards) ?? n(homeTeam.stats.cards_per_match);
+  const cda = n(awayTeam.stats.cards) ?? n(awayTeam.stats.cards_per_match);
   if (cdh !== null && cda !== null) {
     pick(report, 'H', 'cards', cdh); pick(report, 'A', 'cards', cda);
     const cardsLambda = cdh + cda;
