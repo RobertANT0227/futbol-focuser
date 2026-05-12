@@ -204,6 +204,7 @@ export default function CentoPower() {
     teams.forEach((t) => teamAliases(t).forEach((alias) => teamMap.set(`${t.league_id}::${alias}`, t)));
     const iso = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null;
     const selectedLeagueName = selectedLeague ? leagues.find((l) => l.id === selectedLeague)?.name : undefined;
+    const confScore: Record<string, number> = { VERY_HIGH: 5, HIGH: 4, MEDIUM: 3, LOW: 2, VERY_LOW: 1 };
     const out: { bet: BetRecommendation; matchLabel: string; league: string }[] = [];
     for (const m of matches) {
       if (iso && m.match_date !== iso) continue;
@@ -219,7 +220,11 @@ export default function CentoPower() {
         const res = runAnalysis(md, { bankroll, maxRisk: 'high', preferredBets: ['winner', 'goals', 'corners'] });
         const best = [...res.recommendations]
           .filter((r) => r.modelProbability >= 0.5)
-          .sort((a, b) => b.winRate - a.winRate || b.modelProbability - a.modelProbability)[0];
+          .sort((a, b) => {
+            const cb = confScore[b.stakeConfidence] - confScore[a.stakeConfidence];
+            if (cb !== 0) return cb;
+            return b.winRate - a.winRate || b.modelProbability - a.modelProbability;
+          })[0];
         if (best) {
           if (search) {
             const hay = `${m.home} ${m.away} ${leagueLabel}`.toLowerCase();
@@ -229,7 +234,11 @@ export default function CentoPower() {
         }
       } catch { /* skip */ }
     }
-    return out.sort((a, b) => b.bet.winRate - a.bet.winRate);
+    return out.sort((a, b) => {
+      const cb = confScore[b.bet.stakeConfidence] - confScore[a.bet.stakeConfidence];
+      if (cb !== 0) return cb;
+      return b.bet.winRate - a.bet.winRate;
+    });
   }, [matches, teams, leagues, selectedDate, selectedLeague, bankroll, search]);
 
   return (
