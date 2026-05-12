@@ -1,10 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
-import { UploadCloud, Loader2, FileText, AlertTriangle, CheckCircle2, X, Package } from 'lucide-react';
+import { UploadCloud, Loader2, FileText, CheckCircle2, X, Package, Database, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { importCsvFile, peekCsv, groupBundles, type PeekedFile, type FileBundle } from '@/lib/cento/importer';
+import { importLeaguePackage, peekCsv, groupBundles, type ParsedLeagueCsv, type LeagueImportPackage } from '@/lib/cento/importer';
 import type { CpImportResult } from '@/lib/cento/types';
 import { toast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,31 +22,36 @@ export function ImportDropzone({ onDone }: Props) {
   const { user } = useAuth();
   const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [bundles, setBundles] = useState<FileBundle[]>([]);
+  const [packages, setPackages] = useState<LeagueImportPackage[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const stage = useCallback(async (files: FileList | null) => {
     if (!files || !files.length) return;
     setBusy(true);
     try {
-      const peeked: PeekedFile[] = [];
-      for (const f of Array.from(files)) {
-        try { peeked.push(await peekCsv(f)); } catch { /* ignore */ }
+      const peeked = (await Promise.all(Array.from(files).map(async (f) => {
+        try { return await peekCsv(f); } catch { return null; }
+      }))).filter(Boolean) as ParsedLeagueCsv[];
+      const newPackages = groupBundles(peeked);
+      if (!newPackages.length) {
+        toast({ title: 'Import nevalidat', description: 'Liga și sezonul trebuie detectate din coloanele CSV pentru a crea baza de date.' });
+        return;
       }
-      const newBundles = groupBundles(peeked);
-      // merge with existing staged bundles by key
-      setBundles((cur) => {
+      setPackages((cur) => {
         const merged = new Map(cur.map((b) => [b.key, b]));
-        for (const nb of newBundles) {
+        for (const nb of newPackages) {
           if (merged.has(nb.key)) {
             const ex = merged.get(nb.key)!;
-            const seen = new Set(ex.files.map((f) => f.file.name + f.file.size));
-            for (const f of nb.files) {
-              if (!seen.has(f.file.name + f.file.size)) ex.files.push(f);
+            const seen = new Set(ex.entries.map((f) => f.file.name + f.file.size));
+            for (const f of nb.entries) {
+              if (!seen.has(f.file.name + f.file.size)) ex.entries.push(f);
             }
-            ex.hasLeague = ex.hasLeague || nb.hasLeague;
-            ex.hasMatches = ex.hasMatches || nb.hasMatches;
-            ex.hasTeam = ex.hasTeam || nb.hasTeam;
+            ex.importStatus.hasLeagueStats = ex.importStatus.hasLeagueStats || nb.importStatus.hasLeagueStats;
+            ex.importStatus.hasMatches = ex.importStatus.hasMatches || nb.importStatus.hasMatches;
+            ex.importStatus.hasTeams = ex.importStatus.hasTeams || nb.importStatus.hasTeams;
+            ex.stats.matchesCount += nb.stats.matchesCount;
+            ex.stats.teamsCount += nb.stats.teamsCount;
+            ex.coverage = nb.coverage.overall > ex.coverage.overall ? nb.coverage : ex.coverage;
           } else {
             merged.set(nb.key, nb);
           }
@@ -59,21 +63,16 @@ export function ImportDropzone({ onDone }: Props) {
     }
   }, []);
 
-  const updateBundle = (key: string, patch: Partial<FileBundle>) => {
-    setBundles((cur) => cur.map((b) => (b.key === key ? { ...b, ...patch } : b)));
-  };
-
   const removeFile = (bundleKey: string, fileIdx: number) => {
-    setBundles((cur) => cur.flatMap((b) => {
+    setPackages((cur) => cur.flatMap((b) => {
       if (b.key !== bundleKey) return [b];
-      const files = b.files.filter((_, i) => i !== fileIdx);
-      if (!files.length) return [];
+      const entries = b.entries.filter((_, i) => i !== fileIdx);
+      if (!entries.length) return [];
+      const rebuilt = groupBundles(entries);
+      if (!rebuilt.length) return [];
       return [{
         ...b,
-        files,
-        hasLeague: files.some((f) => f.detectedType === 'league'),
-        hasMatches: files.some((f) => f.detectedType === 'match'),
-        hasTeam: files.some((f) => f.detectedType === 'team'),
+        ...rebuilt[0],
       }];
     }));
   };
@@ -82,20 +81,11 @@ export function ImportDropzone({ onDone }: Props) {
     if (!user) return;
     setBusy(true);
     const allResults: CpImportResult[] = [];
-    for (const b of bundles) {
-      // Order: league → team → matches (so teams have their league row first)
-      const ordered = [...b.files].sort((a, c) => order(a.detectedType) - order(c.detectedType));
-      for (const p of ordered) {
-        try {
-          const r = await importCsvFile(p.file, {
-            ownerId: user.id,
-            defaultLeague: b.league,
-            defaultSeason: b.season,
-          });
-          allResults.push({ ...r, league: b.league, season: b.season });
-        } catch (e) {
-          toast({ title: `Eroare la ${p.file.name}`, description: (e as Error).message, variant: 'destructive' });
-        }
+    for (const b of packages) {
+      try {
+        allResults.push(await importLeaguePackage(b, { ownerId: user.id }));
+      } catch (e) {
+        toast({ title: `Eroare la ${b.leagueName}`, description: (e as Error).message, variant: 'destructive' });
       }
     }
     setBusy(false);
@@ -103,7 +93,7 @@ export function ImportDropzone({ onDone }: Props) {
       const ligi = new Set(allResults.map((r) => `${r.league}::${r.season}`)).size;
       const totalRows = allResults.reduce((a, r) => a + r.rowsImported, 0);
       toast({ title: 'Import complet', description: `${ligi} ligă/sezon · ${totalRows} rânduri` });
-      setBundles([]);
+      setPackages([]);
       onDone(allResults);
     }
   };
@@ -137,31 +127,40 @@ export function ImportDropzone({ onDone }: Props) {
         </div>
       </div>
 
-      {bundles.map((b) => {
-        const missing: string[] = [];
-        if (!b.hasLeague) missing.push('League');
-        if (!b.hasMatches) missing.push('Matches');
-        if (!b.hasTeam) missing.push('Team');
+      {packages.map((b) => {
+        const quality = b.coverage.overall >= 80 ? 'Excellent' : b.coverage.overall >= 55 ? 'Good' : 'Limited';
         return (
           <div key={b.key} className="rounded-lg border border-border/60 bg-card/40 p-4">
-            <div className="flex flex-wrap items-end gap-3 mb-3">
-              <div className="flex-1 min-w-[200px]">
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Ligă</div>
-                <Input className="h-9" value={b.league} onChange={(e) => updateBundle(b.key, { league: e.target.value })} />
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold text-base">{b.leagueName}</h3>
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">Season: <span className="font-mono text-foreground">{b.season}</span></div>
               </div>
-              <div className="w-32">
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Sezon</div>
-                <Input className="h-9 font-mono" value={b.season} onChange={(e) => updateBundle(b.key, { season: e.target.value })} />
-              </div>
-              <div className="flex items-center gap-1">
-                <Pill ok={b.hasLeague} label="League" />
-                <Pill ok={b.hasMatches} label="Matches" />
-                <Pill ok={b.hasTeam} label="Team" />
+              <div className="flex items-center gap-1.5">
+                <Pill ok={b.importStatus.hasLeagueStats} label="League Stats" />
+                <Pill ok={b.importStatus.hasMatches} label="Match Database" />
+                <Pill ok={b.importStatus.hasTeams} label="Team Database" />
               </div>
             </div>
 
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+              <Metric label="Matches" value={b.stats.matchesCount} />
+              <Metric label="Teams" value={b.stats.teamsCount} />
+              <Metric label="Coverage" value={`${b.coverage.overall}%`} />
+              <Metric label="Data Quality" value={quality} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3 text-xs">
+              <Coverage label="League Data" value={b.coverage.leagueData} />
+              <Coverage label="Match Data" value={b.coverage.matchData} />
+              <Coverage label="Team Data" value={b.coverage.teamData} />
+            </div>
+
             <div className="space-y-1.5">
-              {b.files.map((f, i) => (
+              {b.entries.map((f, i) => (
                 <div key={f.file.name + i} className="flex items-center gap-2 text-sm rounded-md border border-border/40 bg-background/40 px-2.5 py-1.5">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                   <span className="truncate flex-1 font-mono text-xs">{f.file.name}</span>
@@ -175,35 +174,21 @@ export function ImportDropzone({ onDone }: Props) {
                 </div>
               ))}
             </div>
-
-            {missing.length > 0 && (
-              <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-                <span>Lipsesc: <strong>{missing.join(', ')}</strong>. Analiza va funcționa, dar calitatea poate fi redusă.</span>
-              </div>
-            )}
           </div>
         );
       })}
 
-      {bundles.length > 0 && (
+      {packages.length > 0 && (
         <div className="flex items-center justify-end gap-2">
-          <Button variant="ghost" onClick={() => setBundles([])} disabled={busy}>Anulează</Button>
+          <Button variant="ghost" onClick={() => setPackages([])} disabled={busy}>Anulează</Button>
           <Button onClick={importAll} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-            Import {bundles.length} {bundles.length === 1 ? 'ligă' : 'ligi'}
+            Import {packages.length} {packages.length === 1 ? 'ligă' : 'ligi'}
           </Button>
         </div>
       )}
     </div>
   );
-}
-
-function order(t: string) {
-  if (t === 'league') return 0;
-  if (t === 'team') return 1;
-  if (t === 'match') return 2;
-  return 3;
 }
 
 function Pill({ ok, label }: { ok: boolean; label: string }) {
@@ -216,7 +201,30 @@ function Pill({ ok, label }: { ok: boolean; label: string }) {
            : 'bg-muted/30 text-muted-foreground border-border/40 opacity-60',
       )}
     >
-      {ok ? '✓' : '○'} {label}
+      {ok ? <ShieldCheck className="h-3 w-3 mr-1" /> : '○'} {label}
     </Badge>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border border-border/40 bg-background/40 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="font-mono font-semibold text-sm mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function Coverage({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-border/40 bg-background/40 p-2">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-muted-foreground uppercase tracking-wider text-[10px]">{label}</span>
+        <span className="font-mono text-[11px]">{value}%</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className="h-full bg-primary" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+      </div>
+    </div>
   );
 }
