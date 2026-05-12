@@ -17,7 +17,7 @@ const EXTRA_ALIASES: Record<string, string[]> = {
   league: ['league_name', 'competition_name', 'competition', 'division', 'country league'],
   country: ['country', 'country_name', 'nation'],
   season: ['season', 'sezon', 'season_name', 'year', 'campaign'],
-  match_date: ['date', 'data', 'match date', 'kickoff', 'kickoff_date', 'date_gmt'],
+  match_date: ['date', 'data', 'match date', 'kickoff', 'kickoff_date', 'date_gmt', 'date gmt', 'timestamp', 'unix', 'unix_timestamp'],
   shots_off: ['shots off target', 'shots_off_target', 'shots off', 'so', 'sh off'],
   btts_pct: ['btts%', 'btts %', 'both teams to score %', 'btts_percentage', 'btts percentage'],
   over25_pct: ['over 2.5 %', 'o2.5 %', 'over25%', 'over 2.5%', 'over_25_percentage'],
