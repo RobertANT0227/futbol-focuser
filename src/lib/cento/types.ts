@@ -115,6 +115,7 @@ export interface ValueBet {
   ev: number;            // modelWR*odds - 1
   edge: number;          // (modelWR - impliedProb) * 100
   confidence: number;    // 0..100
+  sampleSize: number;
   risk: Risk;
   variance: number;      // 0..1
   styleClash: boolean;
