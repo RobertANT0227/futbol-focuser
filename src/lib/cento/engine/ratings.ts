@@ -4,7 +4,7 @@ import type { RatingBundle } from './types';
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
 function formScore(form: string[]): number {
-  if (!form.length) return 50;
+  if (!form || !form.length) return 50;
   // exponential decay; latest weighted highest
   let total = 0, weight = 0;
   form.forEach((r, i) => {
@@ -17,7 +17,7 @@ function formScore(form: string[]): number {
 
 function momentumScore(form: string[]): number {
   // last 3 vs prior 3
-  if (form.length < 3) return 50;
+  if (!form || form.length < 3) return 50;
   const score = (arr: string[]) => arr.reduce((a, r) => a + (r === 'W' ? 1 : r === 'D' ? 0.5 : 0), 0) / Math.max(arr.length, 1);
   const recent = score(form.slice(0, 3));
   const prior = score(form.slice(3, 6));
@@ -69,7 +69,7 @@ function offensiveConsistency(team: TeamProfile): number {
 
 function volatility(team: TeamProfile): number {
   // teams that swing W/L often → high volatility
-  const f = team.form;
+  const f = team.form ?? [];
   if (f.length < 3) return 50;
   let switches = 0;
   for (let i = 1; i < f.length; i++) if (f[i] !== f[i - 1]) switches++;
@@ -80,8 +80,8 @@ export function computeRatings(team: TeamProfile, league: LeagueStats | undefine
   return {
     attack: attackScore(team, league?.goalsPerMatch ?? null),
     defense: defenseScore(team, league?.goalsPerMatch ?? null),
-    form: formScore(team.form),
-    momentum: momentumScore(team.form),
+    form: formScore(team.form ?? []),
+    momentum: momentumScore(team.form ?? []),
     matchTempo: 0, // computed at match level
     homeAdvantage: isHome ? clamp(50 + ((team.homeWins ?? 0) - (team.awayWins ?? 0)) * 5) : 50,
     defensiveStability: defensiveStability(team),
