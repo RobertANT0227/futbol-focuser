@@ -327,23 +327,18 @@ export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
   const identity = extractIdentity(rows, map);
   const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
-  const teamSig = teamSignalScore(headers, rows.length);
-  const matchScore = detectAliases(headers, MATCH_SIGNAL_ALIASES, false).matched.length;
-  const leagueScore = detectAliases(headers, LEAGUE_SIGNAL_ALIASES).matched.length;
-  const scores = {
-    MATCHES: Math.min(100, Math.round((matchScore / 5) * 100)),
-    TEAMS: Math.min(100, Math.round((teamSig.score / 9) * 100)),
-    LEAGUE: Math.min(100, Math.round((leagueScore / 4) * 100)),
-  };
+  const details = detectionDetails(headers, rows.length, map);
+  const teamNameHeader = details.teamSignals.matchedHeaders.team_name;
+  const effectiveMap = detectedType === 'team' && !map.team && teamNameHeader ? { ...map, team: teamNameHeader } : map;
   console.groupCollapsed(`[CSV DETECT] ${file.name}`);
   console.log('File:', file.name);
-  console.log('Normalized Headers:', teamSig.normalizedHeaders);
-  console.log('Detection Scores:', scores);
-  console.log('Matched Team Signals:', teamSig.matched);
+  console.log('Normalized Headers:', details.teamSignals.normalizedHeaders);
+  console.log('Detection Scores:', details.scores);
+  console.log('Matched Team Signals:', details.teamSignals.matched);
   console.log('FINAL TYPE:', detectedType.toUpperCase());
   console.groupEnd();
   return {
-    file, headers, rows, map, detectedType,
+    file, headers, rows, map: effectiveMap, detectedType,
     detectedLeague: identity.leagueName || fileHint.leagueName,
     normalizedLeagueName: identity.normalizedLeagueName || fileHint.normalizedLeagueName,
     detectedSeason: identity.season || fileHint.season,
