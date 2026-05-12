@@ -8,6 +8,32 @@ import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { cn } from '@/lib/utils';
 
 function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
+
+type ConfTier = 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+const CONF_TIER_LABEL: Record<ConfTier, string> = {
+  VERY_LOW: 'Very Low',
+  LOW: 'Low',
+  MEDIUM: 'Medium',
+  HIGH: 'High',
+  VERY_HIGH: 'Very High',
+};
+const CONF_TIER_STYLE: Record<ConfTier, string> = {
+  VERY_LOW: 'bg-destructive/20 border-destructive/50 text-destructive',
+  LOW: 'bg-destructive/10 border-destructive/30 text-destructive',
+  MEDIUM: 'bg-accent/20 border-accent/50 text-accent',
+  HIGH: 'bg-primary/15 border-primary/40 text-primary',
+  VERY_HIGH: 'bg-primary/25 border-primary/60 text-primary',
+};
+function computeConfTier(confidence: number, winRatePct: number): ConfTier {
+  // blended score: 60% model confidence, 40% win-rate of pick
+  const score = confidence * 0.6 + winRatePct * 0.4;
+  if (score >= 78) return 'VERY_HIGH';
+  if (score >= 65) return 'HIGH';
+  if (score >= 52) return 'MEDIUM';
+  if (score >= 40) return 'LOW';
+  return 'VERY_LOW';
+}
+
 function fmtDate(d: string | null) {
   if (!d) return 'TBD';
   return new Date(d).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -15,6 +41,7 @@ function fmtDate(d: string | null) {
 
 export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName?: string }) {
   const { match, ratingsHome: rh, ratingsAway: ra, probabilities, topMarket, confidence, grade, stakeUnits, quality, context, explanation, expectedGoalsHome, expectedGoalsAway } = a;
+  const confTier = computeConfTier(confidence, topMarket.prob * 100);
 
   const formStrip = (form: string[]) => (
     <div className="flex gap-1">
@@ -59,6 +86,12 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Confidence</div>
             <div className="text-2xl font-mono font-bold text-foreground">{confidence}</div>
+            <div className={cn(
+              'inline-block mt-1 px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider',
+              CONF_TIER_STYLE[confTier],
+            )}>
+              {CONF_TIER_LABEL[confTier]}
+            </div>
             <div className="text-[10px] font-bold text-accent">{stakeUnits}U</div>
           </div>
         </div>
