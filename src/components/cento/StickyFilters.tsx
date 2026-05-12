@@ -4,11 +4,14 @@ import { Slider } from '@/components/ui/slider';
 
 export interface CentoFilters {
   edgeMin: number;
+  confidenceMin: number;
+  sampleSizeMin: number;
   oddsMin: number;
   oddsMax: number;
   risk: string;
   market: string;
   league: string;
+  stakeMode: 'flat' | 'kelly' | 'dynamic';
 }
 
 interface Props {
@@ -25,6 +28,14 @@ export function StickyFilters({ filters, setFilters, leagues }: Props) {
         <div className="min-w-[180px] flex-1">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Edge Min · {filters.edgeMin}%</div>
           <Slider value={[filters.edgeMin]} min={0} max={20} step={0.5} onValueChange={([v]) => set('edgeMin', v)} />
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Conf.</div>
+          <Input className="w-20 h-9 font-mono" type="number" min={0} max={100} value={filters.confidenceMin} onChange={(e) => set('confidenceMin', +e.target.value)} />
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Sample</div>
+          <Input className="w-20 h-9 font-mono" type="number" min={0} value={filters.sampleSizeMin} onChange={(e) => set('sampleSizeMin', +e.target.value)} />
         </div>
         <div>
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Cota</div>
@@ -56,6 +67,17 @@ export function StickyFilters({ filters, setFilters, leagues }: Props) {
               <SelectItem value="goals">Goluri</SelectItem>
               <SelectItem value="corners">Cornere</SelectItem>
               <SelectItem value="cards">Cartonașe</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Stake</div>
+          <Select value={filters.stakeMode} onValueChange={(v) => set('stakeMode', v as CentoFilters['stakeMode'])}>
+            <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="flat">Flat stake</SelectItem>
+              <SelectItem value="kelly">Kelly Fractional</SelectItem>
+              <SelectItem value="dynamic">Dynamic Risk</SelectItem>
             </SelectContent>
           </Select>
         </div>
