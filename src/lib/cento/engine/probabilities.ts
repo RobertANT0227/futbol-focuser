@@ -158,7 +158,6 @@ export function computeCornerMarkets(home: TeamProfile, away: TeamProfile, leagu
   const out: MarketProb[] = [];
   const cfg: { line: number; over: MarketProb['key']; under: MarketProb['key'] }[] = [
     { line: 10.5, over: 'OVER_CORNERS_10_5', under: 'UNDER_CORNERS_10_5' },
-    { line: 11.5, over: 'OVER_CORNERS_11_5', under: 'UNDER_CORNERS_11_5' },
   ];
   for (const c of cfg) {
     const pOver = probAtLeast(Math.ceil(c.line));
