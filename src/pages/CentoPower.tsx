@@ -22,7 +22,7 @@ import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { fuzzyMatch, normalizeTeamName } from '@/lib/cento/footystats/util';
 import { isoDateFromRaw } from '@/lib/cento/footystats/date';
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
-import { Upload, Trash2, Database, Calendar, Trophy } from 'lucide-react';
+import { Upload, Trash2, Database, Calendar, Trophy, Info } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
@@ -173,11 +173,43 @@ export default function CentoPower() {
     <div className="container max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Top bar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Trophy className="h-6 w-6 text-primary" /> Cento Power
-          </h1>
-          <p className="text-xs text-muted-foreground">Premium tipster intelligence · multi-ligă</p>
+        <div className="flex items-start gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="Cum se calculează Confidence">
+                <Info className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-96 text-xs space-y-2">
+              <div className="font-bold text-sm flex items-center gap-2">
+                <Info className="h-3.5 w-3.5 text-primary" /> Cum se alege gradul de Confidence
+              </div>
+              <p className="text-muted-foreground">
+                Tier-ul (Very Low → Very High) este un <strong>scor mixt</strong>:
+                <br />
+                <span className="font-mono">scor = 60% × Confidence model + 40% × Win Rate pick</span>
+              </p>
+              <ul className="space-y-1">
+                <li><span className="inline-block w-20 font-mono text-primary">≥ 78</span> Very High</li>
+                <li><span className="inline-block w-20 font-mono text-primary">65 – 77</span> High</li>
+                <li><span className="inline-block w-20 font-mono text-accent">52 – 64</span> Medium</li>
+                <li><span className="inline-block w-20 font-mono text-destructive">40 – 51</span> Low</li>
+                <li><span className="inline-block w-20 font-mono text-destructive">{'<'} 40</span> Very Low</li>
+              </ul>
+              <p className="text-muted-foreground pt-1 border-t border-border/50">
+                <strong>De ce vezi rar High:</strong> modelul e calibrat strict (Premium Tipster, WR ≥ 76%).
+                Pentru High ai nevoie de pick cu probabilitate mare <em>și</em> date complete (xG ligă, formă, cote).
+                Lipsa unui CSV (league sau teams) trage Confidence-ul în jos chiar dacă pick-ul e bun.
+                Verifică în <strong>Import CSV</strong> ca scorul de coverage să fie 100%.
+              </p>
+            </PopoverContent>
+          </Popover>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <Trophy className="h-6 w-6 text-primary" /> Cento Power
+            </h1>
+            <p className="text-xs text-muted-foreground">Premium tipster intelligence · multi-ligă</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <Card className="px-3 py-1.5 bg-card/60">
