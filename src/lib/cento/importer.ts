@@ -204,9 +204,10 @@ function extractSeason(rows: Record<string, unknown>[], map: Record<string, stri
   const pool = [direct, leagueName, ...rows.slice(0, 20).flatMap((r) => Object.values(r).map((v) => String(v ?? '')))];
   for (const value of pool) {
     if (!value) continue;
+    if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(value.trim())) continue;
     const full = value.match(/(20\d{2})\s*(?:\/|-|to|–|—)\s*(20\d{2})/i);
     if (full) return `${full[1]}/${full[2]}`;
-    const short = value.match(/(20\d{2})\s*(?:\/|-)\s*(\d{2})/);
+    const short = value.match(/(20\d{2})\s*(?:\/|-)\s*(\d{2})(?!\s*[-/.]\s*\d{1,2})/);
     if (short) return `${short[1]}/20${short[2]}`;
   }
   const dates = rows.map((r) => parseDate(map.match_date ? cleanString(r[map.match_date]) : '')).filter(Boolean) as string[];
