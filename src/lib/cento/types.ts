@@ -71,6 +71,23 @@ export interface CpImportResult {
   rowsImported: number;
   duplicates: number;
   fileName: string;
+  leagueId?: string;
+  normalizedLeagueName?: string;
+  importStatus?: {
+    hasLeagueStats: boolean;
+    hasMatches: boolean;
+    hasTeams: boolean;
+  };
+  stats?: {
+    matchesCount: number;
+    teamsCount: number;
+  };
+  coverage?: {
+    leagueData: number;
+    matchData: number;
+    teamData: number;
+    overall: number;
+  };
 }
 
 export type Risk = 'low' | 'medium' | 'high';
