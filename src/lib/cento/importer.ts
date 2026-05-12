@@ -137,7 +137,7 @@ function detectAliases(headers: string[], aliases: Record<string, string[]>) {
     const exact = normalizedVariants.some((v) => headerSet.has(v));
     const fuzzy = normalizedVariants.some((v) => {
       const tokens = v.split('_').filter((t) => t.length > 1);
-      return tokens.length >= 2 && normalized.some((h) => tokens.every((t) => h.split('_').includes(t)));
+      return tokens.length >= 1 && normalized.some((h) => tokens.every((t) => h.split('_').includes(t)));
     });
     if (exact || fuzzy) matched.push(canonical);
   }
