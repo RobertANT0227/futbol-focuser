@@ -16,7 +16,9 @@ interface Props {
   onSave?: (bet: ValueBet) => void;
 }
 
-const PREMIUM_WR = 0.76;
+const PREMIUM_WR = 0.60;
+const ODDS_MIN = 1.50;
+const ODDS_MAX = 2.00;
 
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const num = (v: unknown): number | null => {
@@ -104,9 +106,14 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
   }
 
   const bets = analysis.bets.map((b) => ({ ...b, league: b.league || league || '' }));
-  // Premium Tipster picks: high model win-rate (>=76%), regardless of value/edge
-  const premiumBets = bets.filter((b) => b.modelWR >= PREMIUM_WR).sort((a, b) => b.modelWR - a.modelWR);
-  const otherBets = bets.filter((b) => b.modelWR < PREMIUM_WR).sort((a, b) => b.modelWR - a.modelWR);
+  // Tipster mode: cote 1.50–2.00, sortate după Win Rate
+  const inRange = (b: ValueBet) => b.odds >= ODDS_MIN && b.odds <= ODDS_MAX;
+  const premiumBets = bets
+    .filter((b) => inRange(b) && b.modelWR >= PREMIUM_WR)
+    .sort((a, b) => b.modelWR - a.modelWR);
+  const otherBets = bets
+    .filter((b) => !inRange(b) || b.modelWR < PREMIUM_WR)
+    .sort((a, b) => b.modelWR - a.modelWR);
   const top = premiumBets[0];
 
   // Motivation block built from extra CSV signals
@@ -182,15 +189,15 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
       {premiumBets.length > 0 ? (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm">⭐ Pronosticuri Premium Tipster <span className="text-[10px] font-normal text-muted-foreground">(WR ≥ {Math.round(PREMIUM_WR * 100)}%)</span></h4>
+            <h4 className="font-bold text-sm">⭐ Pronosticuri Tipster <span className="text-[10px] font-normal text-muted-foreground">(cote {ODDS_MIN.toFixed(2)}–{ODDS_MAX.toFixed(2)} · WR ≥ {Math.round(PREMIUM_WR * 100)}%)</span></h4>
             <span className="text-[10px] font-mono text-muted-foreground">{premiumBets.length} selecții</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {premiumBets.map((b, i) => <ValueBetCard key={`v-${i}`} bet={b} onSave={onSave} hideStyles />)}
           </div>
           {top && (
-            <div className="mt-3 rounded-lg border border-border/40 bg-secondary/30 p-3 text-xs">
-              <strong className="text-foreground">Best Bet — {top.market}:</strong>{' '}
+            <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
+              <strong className="text-foreground">🎯 Best Bet — {top.market}:</strong>{' '}
               Win Rate {(top.modelWR * 100).toFixed(1)}% la cota {top.odds.toFixed(2)}.
               Stake (Full Kelly): {top.suggestedStakeLei} LEI ({(top.suggestedStakePct * 100).toFixed(1)}% bankroll).
             </div>
@@ -198,7 +205,7 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
         </div>
       ) : (
         <Card className="p-4 text-center text-xs text-muted-foreground bg-card/40">
-          Niciun pronostic Premium Tipster (WR ≥ {Math.round(PREMIUM_WR * 100)}%) pe baza datelor curente. Vezi mai jos selecțiile analizate.
+          Niciun pronostic în intervalul {ODDS_MIN.toFixed(2)}–{ODDS_MAX.toFixed(2)} cu WR ≥ {Math.round(PREMIUM_WR * 100)}%. Vezi mai jos restul selecțiilor analizate.
         </Card>
       )}
 
@@ -206,7 +213,7 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
       {otherBets.length > 0 && (
         <details className="rounded-lg border border-border/40 bg-card/40 p-3">
           <summary className="text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer">
-            📋 Alte selecții analizate ({otherBets.length})
+            📋 Alte selecții (în afara intervalului tipster) ({otherBets.length})
           </summary>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
             {otherBets.map((b, i) => <ValueBetCard key={`o-${i}`} bet={b} onSave={onSave} hideStyles />)}

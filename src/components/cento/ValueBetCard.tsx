@@ -1,8 +1,8 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bookmark, TrendingUp, Swords, AlertTriangle } from 'lucide-react';
+import { Bookmark, Swords, AlertTriangle } from 'lucide-react';
 import type { ValueBet } from '@/lib/cento/types';
-import { EdgeBar, ConfidenceBar } from './EdgeBar';
+import { ConfidenceBar } from './EdgeBar';
 import { RiskBadge } from './RiskBadge';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -58,7 +58,7 @@ export function ValueBetCard({ bet, onSave, hideStyles }: Props) {
       <div className="rounded-md bg-background/50 border border-border/40 p-3 mb-3">
         <div className="flex items-baseline justify-between mb-2">
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Best Market</div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Pronostic</div>
             <div className="font-bold text-base text-primary">{bet.market}</div>
           </div>
           <div className="text-right">
@@ -67,31 +67,19 @@ export function ValueBetCard({ bet, onSave, hideStyles }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 text-center mt-3">
+        <div className="grid grid-cols-2 gap-2 text-center mt-3">
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase">WR</div>
-            <div className="font-mono text-sm font-semibold">{(bet.modelWR * 100).toFixed(1)}%</div>
+            <div className="text-[10px] text-muted-foreground uppercase">Win Rate</div>
+            <div className="font-mono text-sm font-semibold text-primary">{(bet.modelWR * 100).toFixed(1)}%</div>
           </div>
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase">Edge</div>
-            <div className="font-mono text-sm font-semibold text-primary flex items-center justify-center gap-1">
-              <TrendingUp className="h-3 w-3" />{bet.edge.toFixed(1)}%
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase">EV</div>
-            <div className="font-mono text-sm font-semibold">{(bet.ev * 100).toFixed(1)}%</div>
+            <div className="text-[10px] text-muted-foreground uppercase">Confidence</div>
+            <div className="font-mono text-sm font-semibold">{bet.confidence}%</div>
           </div>
         </div>
       </div>
 
       <div className="space-y-2 mb-3">
-        <div>
-          <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-            <span>Edge</span><span>{bet.edge.toFixed(1)}%</span>
-          </div>
-          <EdgeBar value={bet.edge} />
-        </div>
         <div>
           <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
             <span>Confidence</span><span>{bet.confidence}%</span>
