@@ -274,9 +274,22 @@ export interface LeagueImportPackage {
   coverage: { leagueData: number; matchData: number; teamData: number; overall: number };
 }
 
+async function readCsvText(file: File) {
+  const bytes = await file.arrayBuffer();
+  const decoders = [
+    new TextDecoder('utf-8', { fatal: true }),
+    new TextDecoder('windows-1252'),
+    new TextDecoder('iso-8859-1'),
+  ];
+  for (const decoder of decoders) {
+    try { return decoder.decode(bytes); } catch { /* try next encoding */ }
+  }
+  return await file.text();
+}
+
 export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
-  const text = await file.text();
-  const res = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
+  const text = await readCsvText(file);
+  const res = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true, dynamicTyping: false, transformHeader: cleanCsvHeader });
   const rows = (res.data || []).filter((r) => Object.values(r).some((v) => v !== '' && v != null));
   const headers = (res.meta.fields || []).map(cleanCsvHeader);
   const map = autoMapColumns(headers);
