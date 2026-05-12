@@ -24,6 +24,9 @@ export interface LeagueStats {
   cornersPerMatch: number | null;
   predictionRisk: number | null;
   totalMatches: number | null;
+  xgPerMatch: number | null;
+  homeAdvantagePct: number | null;
+  raw?: Record<string, number | string | null>;
 }
 
 export interface ParsedMatch {
@@ -57,6 +60,9 @@ export interface ParsedMatch {
   awayCorners: number | null;
   homeCards: number | null;
   awayCards: number | null;
+  preXgHome?: number | null;
+  preXgAway?: number | null;
+  raw?: Record<string, number | string | null>;
 }
 
 export interface TeamProfile {
@@ -108,6 +114,18 @@ export interface TeamProfile {
   scoringSecondHalfPct: number | null;
   concedingFirstHalfPct: number | null;
   concedingSecondHalfPct: number | null;
+  // xG (FootyStats)
+  xgFor: number | null;
+  xgAgainst: number | null;
+  xgForHome: number | null;
+  xgForAway: number | null;
+  xgAgainstHome: number | null;
+  xgAgainstAway: number | null;
+  // win % aggregates (when form string absent)
+  winPct: number | null;
+  drawPct: number | null;
+  lossPct: number | null;
+  raw?: Record<string, number | string | null>;
 }
 
 export interface ParsedLeagueBundle {
