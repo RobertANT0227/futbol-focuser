@@ -12,6 +12,7 @@ import { ImportDropzone } from '@/components/cento/ImportDropzone';
 import { DatabaseTree, type DbLeague } from '@/components/cento/DatabaseTree';
 import { ValueBetCard } from '@/components/cento/ValueBetCard';
 import { StickyFilters, type CentoFilters } from '@/components/cento/StickyFilters';
+import { EdgeSettings } from '@/components/cento/EdgeSettings';
 import { buildValueBets } from '@/lib/cento/valueEngine';
 import type { CpTeam, CpMatch, ValueBet, CpImportResult } from '@/lib/cento/types';
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
@@ -135,6 +136,7 @@ export default function CentoPower() {
             <KPI label="Value Bets" value={allBets.length} />
             <KPI label="Bankroll" value={`${bankroll.toFixed(0)} LEI`} />
           </div>
+          <EdgeSettings filters={filters} setFilters={setFilters} bankroll={bankroll} />
         </div>
       </div>
 
