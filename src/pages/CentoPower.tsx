@@ -66,8 +66,13 @@ export default function CentoPower() {
       if (fuzzy) return data.teams.find((t) => t.name === fuzzy)?.stats as TeamProfile;
       return undefined;
     };
-    const today = TODAY();
-    const upcoming = data.matches.filter((m) => !m.match_date || m.match_date >= today);
+    const upcoming = data.matches.filter((m) => {
+      const s = (m.stats ?? {}) as { played?: boolean; homeGoals?: number | null; awayGoals?: number | null };
+      // Unplayed if explicitly flagged or no final score recorded
+      if (s.played === true) return false;
+      if (s.homeGoals !== null && s.homeGoals !== undefined && s.awayGoals !== null && s.awayGoals !== undefined) return false;
+      return true;
+    });
     return upcoming.map((m) => {
       const stats = (m.stats ?? {}) as ParsedMatch;
       const odds = (m.odds ?? {}) as Record<string, number | null>;
