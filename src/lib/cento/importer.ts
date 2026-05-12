@@ -256,11 +256,10 @@ export function groupBundles(peeked: ParsedLeagueCsv[]): LeagueImportPackage[] {
     const withIdentity = c.members.find((m) => m.normalizedLeagueName) || c.canonical;
     const season = c.season || withIdentity.detectedSeason;
     for (const m of c.members) {
-      if (!m.normalizedLeagueName) {
-        m.detectedLeague = withIdentity.detectedLeague;
-        m.normalizedLeagueName = withIdentity.normalizedLeagueName;
-        m.detectedCountry = m.detectedCountry || withIdentity.detectedCountry;
-      }
+      // Force unified identity across the cluster so they merge into ONE league.
+      m.detectedLeague = withIdentity.detectedLeague || m.detectedLeague;
+      m.normalizedLeagueName = withIdentity.normalizedLeagueName || m.normalizedLeagueName;
+      m.detectedCountry = m.detectedCountry || withIdentity.detectedCountry;
       if (!m.detectedSeason) m.detectedSeason = season;
     }
   }
