@@ -217,12 +217,20 @@ export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
   const text = await file.text();
   const res = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
   const rows = (res.data || []).filter((r) => Object.values(r).some((v) => v !== '' && v != null));
-  const headers = res.meta.fields || [];
+  const headers = (res.meta.fields || []).map((h) => h.replace(/^\uFEFF/, '').trim());
   const map = autoMapColumns(headers);
   const detectedType = detectFileType(headers, rows.length, map);
   const identity = extractIdentity(rows, map);
   const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
+  const teamSig = teamSignalScore(headers);
+  const confidence = Math.min(100, Math.round((teamSig.score / 8) * 100));
+  console.groupCollapsed(`[CSV DETECT] ${file.name}`);
+  console.log('Detected Type:', detectedType.toUpperCase());
+  console.log('Matched Team Signals:', teamSig.matched);
+  console.log('Confidence:', `${confidence}%`);
+  console.log('Headers:', headers.length);
+  console.groupEnd();
   return {
     file, headers, rows, map, detectedType,
     detectedLeague: identity.leagueName || fileHint.leagueName,
