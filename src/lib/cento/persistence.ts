@@ -57,22 +57,23 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
     : prevStats;
 
   if (!existing) {
+    const insertPayload: any = {
+      owner_id: userId,
+      name: meta.leagueName,
+      country: meta.country,
+      season: meta.season,
+      normalized_name: meta.normalizedKey,
+      league_stats: leagueStatsPayload,
+      has_league_stats: !!bundle.league,
+      has_matches: !!bundle.matches?.length,
+      has_teams: !!bundle.teams?.length,
+      matches_count: 0,
+      teams_count: 0,
+      coverage: {},
+    };
     const { data, error } = await supabase
       .from('cp_leagues')
-      .insert({
-        owner_id: userId,
-        name: meta.leagueName,
-        country: meta.country,
-        season: meta.season,
-        normalized_name: meta.normalizedKey,
-        league_stats: leagueStatsPayload,
-        has_league_stats: !!bundle.league,
-        has_matches: !!bundle.matches?.length,
-        has_teams: !!bundle.teams?.length,
-        matches_count: 0,
-        teams_count: 0,
-        coverage: {},
-      })
+      .insert(insertPayload)
       .select('id')
       .single();
     if (error) throw error;
