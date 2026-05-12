@@ -8,6 +8,8 @@ import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { cn } from '@/lib/utils';
 import { CONFIDENCE_LABEL, type ConfidenceLevel } from '@/lib/bankroll';
 import { MatchAnalysisDialog } from './MatchAnalysisDialog';
+import { Link } from 'react-router-dom';
+import { Wallet } from 'lucide-react';
 
 function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
 
@@ -132,6 +134,12 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
               {CONFIDENCE_LABEL[confTier]}
             </div>
             <div className="text-[10px] font-bold text-accent">{stakeUnits}U</div>
+            <Link
+              to={`/bankroll?pick=${encodeURIComponent(`${match.home} vs ${match.away}`)}&sel=${encodeURIComponent(topMarket.label)}&prob=${topMarket.prob.toFixed(4)}${topMarket.odds ? `&odds=${topMarket.odds.toFixed(2)}` : ''}`}
+              className="inline-flex items-center gap-1 mt-2 px-2 py-1 rounded border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider transition"
+            >
+              <Wallet className="h-3 w-3" /> Cum pariez (Flat / Kelly)
+            </Link>
           </div>
         </div>
       ) : (
