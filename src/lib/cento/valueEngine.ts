@@ -8,6 +8,17 @@ function n(v: unknown): number | null {
   return Number.isFinite(x) ? x : null;
 }
 
+function perMatch(value: number | null, matchesPlayed: number | null): number | null {
+  if (value === null) return null;
+  if (matchesPlayed && matchesPlayed > 0 && value > 12) return value / matchesPlayed;
+  return value;
+}
+
+function pct01(value: number | null): number | null {
+  if (value === null) return null;
+  return value > 1 ? value / 100 : value;
+}
+
 /** Track which stats were available and which were missing per team. */
 interface DataReport {
   used: Set<string>;
@@ -53,25 +64,27 @@ function teamLambda(
   const t = team.stats; const o = opp.stats;
   const T = isHome ? 'H' : 'A';
   const O = isHome ? 'A' : 'H';
+  const tMp = n(t.matches_played);
+  const oMp = n(o.matches_played);
 
   // Attack signals (per match)
   const attSignals: number[] = [];
-  const xg = pick(report, T, 'xg', n(t.xg));
+  const xg = pick(report, T, 'xg', n(t.xg) ?? (isHome ? n(t.xg_for_avg_home) : n(t.xg_for_avg_away)) ?? n(t.xg_avg_per_match));
   if (xg !== null) attSignals.push(xg);
-  const splitGS = isHome ? n(t.goals_scored_home) : n(t.goals_scored_away);
-  const gs = pick(report, T, 'goals_scored', splitGS ?? n(t.goals_scored));
+  const splitGS = perMatch(isHome ? n(t.goals_scored_home) : n(t.goals_scored_away), tMp);
+  const gs = pick(report, T, 'goals_scored', splitGS ?? n(t.goals_scored_per_match) ?? perMatch(n(t.goals_scored), tMp));
   if (gs !== null) attSignals.push(gs);
-  const sot = pick(report, T, 'shots_on_target', isHome ? (n(t.shots_on_target_home as unknown) ?? n(t.shots_on_target)) : (n(t.shots_on_target_away as unknown) ?? n(t.shots_on_target)));
+  const sot = pick(report, T, 'shots_on_target', perMatch(isHome ? (n(t.shots_on_target_home as unknown) ?? n(t.shots_on_target)) : (n(t.shots_on_target_away as unknown) ?? n(t.shots_on_target)), tMp));
   if (sot !== null) attSignals.push(Math.min(2.5, sot * 0.30));
-  const da = pick(report, T, 'dangerous_attacks', n(t.dangerous_attacks));
+  const da = pick(report, T, 'dangerous_attacks', perMatch(n(t.dangerous_attacks), tMp));
   if (da !== null) attSignals.push(Math.min(2.5, da * 0.025));
 
   // Defense signals (opponent allows)
   const defSignals: number[] = [];
-  const xga = pick(report, O, 'xga', n(o.xga));
+  const xga = pick(report, O, 'xga', n(o.xga) ?? (isHome ? n(o.xg_against_avg_away) : n(o.xg_against_avg_home)) ?? n(o.xga_avg_per_match));
   if (xga !== null) defSignals.push(xga);
-  const splitGC = isHome ? n(o.goals_conceded_away) : n(o.goals_conceded_home);
-  const gc = pick(report, O, 'goals_conceded', splitGC ?? n(o.goals_conceded));
+  const splitGC = perMatch(isHome ? n(o.goals_conceded_away) : n(o.goals_conceded_home), oMp);
+  const gc = pick(report, O, 'goals_conceded', splitGC ?? n(o.goals_conceded_per_match) ?? perMatch(n(o.goals_conceded), oMp));
   if (gc !== null) defSignals.push(gc);
 
   if (!attSignals.length && !defSignals.length) return { lambda: null, signalsUsed: 0 };
