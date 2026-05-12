@@ -32,6 +32,7 @@ export default function CentoPower() {
   const [leagues, setLeagues] = useState<SyncedLeague[]>([]);
   const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
   const [data, setData] = useState<{ matches: SyncedMatch[]; teams: SyncedTeam[] } | null>(null);
+  const [allData, setAllData] = useState<Record<string, { matches: SyncedMatch[]; teams: SyncedTeam[] }>>({});
   const [loading, setLoading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -49,26 +50,48 @@ export default function CentoPower() {
 
   useEffect(() => {
     if (!activeLeagueId) { setData(null); return; }
+    if (activeLeagueId === '__all__') { setData(null); return; }
     setLoading(true);
     getLeagueData(activeLeagueId).then(setData).finally(() => setLoading(false));
   }, [activeLeagueId]);
 
   const activeLeague = leagues.find((l) => l.id === activeLeagueId);
 
-  // Build analyses
-  const analyses: { league: SyncedLeague; analysis: PowerAnalysis }[] = useMemo(() => {
-    if (!activeLeague || !data) return [];
-    const leagueStats = (activeLeague.league_stats ?? {}) as LeagueStats;
-    const teamNames = data.teams.map((t) => t.name);
+  // Load data for ALL leagues (used by "All leagues" view + Top Picks)
+  useEffect(() => {
+    if (!leagues.length) { setAllData({}); return; }
+    let cancelled = false;
+    (async () => {
+      const missing = leagues.filter((l) => !allData[l.id]);
+      if (!missing.length) return;
+      const entries = await Promise.all(missing.map(async (l) => {
+        try { return [l.id, await getLeagueData(l.id)] as [string, { matches: SyncedMatch[]; teams: SyncedTeam[] }]; }
+        catch { return [l.id, { matches: [] as SyncedMatch[], teams: [] as SyncedTeam[] }] as [string, { matches: SyncedMatch[]; teams: SyncedTeam[] }]; }
+      }));
+      if (cancelled) return;
+      setAllData((prev) => {
+        const next = { ...prev };
+        for (const [id, d] of entries) next[id] = d;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leagues]);
+
+  // Helper: build analyses for a single league
+  const buildAnalyses = (league: SyncedLeague, d: { matches: SyncedMatch[]; teams: SyncedTeam[] }): { league: SyncedLeague; analysis: PowerAnalysis }[] => {
+    const leagueStats = (league.league_stats ?? {}) as LeagueStats;
+    const teamNames = d.teams.map((t) => t.name);
     const findTeam = (name: string): TeamProfile | undefined => {
-      const direct = data.teams.find((t) => normalizeTeamName(t.name) === normalizeTeamName(name));
+      const direct = d.teams.find((t) => normalizeTeamName(t.name) === normalizeTeamName(name));
       if (direct) return direct.stats as TeamProfile;
       const fuzzy = fuzzyMatch(name, teamNames);
-      if (fuzzy) return data.teams.find((t) => t.name === fuzzy)?.stats as TeamProfile;
+      if (fuzzy) return d.teams.find((t) => t.name === fuzzy)?.stats as TeamProfile;
       return undefined;
     };
-    const upcoming = data.matches.filter((m) => {
-      const s = (m.stats ?? {}) as { played?: boolean; homeGoals?: number | null; awayGoals?: number | null; raw?: Record<string, unknown>; date?: string | null; timestamp?: number | null };
+    const upcoming = d.matches.filter((m) => {
+      const s = (m.stats ?? {}) as { played?: boolean; homeGoals?: number | null; awayGoals?: number | null; raw?: Record<string, unknown> };
       const status = String(s.raw?.status ?? '').toLowerCase();
       if (status === 'incomplete' || status === 'scheduled' || status === 'postponed') return true;
       if (s.played === false) return true;
@@ -88,9 +111,38 @@ export default function CentoPower() {
         oddsOver25: odds.oddsOver25 ?? null, oddsUnder25: odds.oddsUnder25 ?? null,
       };
       const a = analyzeMatch(matchObj, findTeam(m.home), findTeam(m.away), leagueStats);
-      return { league: activeLeague, analysis: a };
-    }).sort((a, b) => (a.analysis.match.date ?? '9999-99-99').localeCompare(b.analysis.match.date ?? '9999-99-99'));
-  }, [activeLeague, data]);
+      return { league, analysis: a };
+    });
+  };
+
+  // Build analyses
+  const analyses: { league: SyncedLeague; analysis: PowerAnalysis }[] = useMemo(() => {
+    if (activeLeagueId === '__all__') {
+      const out: { league: SyncedLeague; analysis: PowerAnalysis }[] = [];
+      for (const l of leagues) {
+        const d = allData[l.id];
+        if (!d) continue;
+        out.push(...buildAnalyses(l, d));
+      }
+      return out.sort((a, b) => (a.analysis.match.date ?? '9999-99-99').localeCompare(b.analysis.match.date ?? '9999-99-99'));
+    }
+    if (!activeLeague || !data) return [];
+    return buildAnalyses(activeLeague, data)
+      .sort((a, b) => (a.analysis.match.date ?? '9999-99-99').localeCompare(b.analysis.match.date ?? '9999-99-99'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLeague, data, activeLeagueId, leagues, allData]);
+
+  // All leagues analyses for Top Picks
+  const allAnalyses = useMemo(() => {
+    const out: { league: SyncedLeague; analysis: PowerAnalysis }[] = [];
+    for (const l of leagues) {
+      const d = allData[l.id];
+      if (!d) continue;
+      out.push(...buildAnalyses(l, d));
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leagues, allData]);
 
   const filtered = analyses.filter((x) => {
     if (selectedDate) {
@@ -103,11 +155,11 @@ export default function CentoPower() {
   });
 
   const topPicks = useMemo(() => {
-    return analyses
+    return allAnalyses
       .filter((x) => x.analysis.grade === 'STRONG' || x.analysis.grade === 'MEDIUM')
       .sort((a, b) => b.analysis.confidence - a.analysis.confidence)
-      .slice(0, 12);
-  }, [analyses]);
+      .slice(0, 50);
+  }, [allAnalyses]);
 
   const handleDeleteLeague = async (id: string) => {
     if (!confirm('Ștergi această ligă și toate datele?')) return;
@@ -168,6 +220,7 @@ export default function CentoPower() {
               <Select value={activeLeagueId ?? ''} onValueChange={setActiveLeagueId}>
                 <SelectTrigger className="w-[280px]"><SelectValue placeholder="Alege liga" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__all__">🌍 Toate ligile</SelectItem>
                   {leagues.map((l) => (
                     <SelectItem key={l.id} value={l.id}>{l.country ? `${l.country} · ` : ''}{l.name} · {l.season}</SelectItem>
                   ))}
