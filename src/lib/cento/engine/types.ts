@@ -13,12 +13,13 @@ export interface RatingBundle {
 }
 
 export type PickGrade = 'STRONG' | 'MEDIUM' | 'RISKY' | 'PASS';
-export type MarketKey = '1' | 'X' | '2' | 'BTTS_YES' | 'BTTS_NO' | 'OVER_2_5' | 'UNDER_2_5';
+export type MarketKey = '1' | 'X' | '2' | 'BTTS_YES' | 'BTTS_NO' | 'OVER_2_5' | 'UNDER_2_5' | 'OVER_CORNERS' | 'UNDER_CORNERS';
 
 export const MARKET_LABEL: Record<MarketKey, string> = {
   '1': 'Home Win', 'X': 'Draw', '2': 'Away Win',
   BTTS_YES: 'BTTS Yes', BTTS_NO: 'BTTS No',
   OVER_2_5: 'Over 2.5', UNDER_2_5: 'Under 2.5',
+  OVER_CORNERS: 'Over Corners', UNDER_CORNERS: 'Under Corners',
 };
 
 export interface MarketProb {
