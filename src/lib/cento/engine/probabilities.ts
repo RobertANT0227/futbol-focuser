@@ -155,19 +155,18 @@ export function computeCornerMarkets(home: TeamProfile, away: TeamProfile, leagu
     return Math.min(1, Math.max(0, p));
   };
 
-  const lines = [10.5, 11.5, 12.5];
-  let bestLine = 10.5;
-  let bestDist = 1;
-  let bestOver = 0.5;
-  for (const line of lines) {
-    const pOver = probAtLeast(Math.ceil(line));
-    const dist = Math.abs(pOver - 0.5);
-    if (dist < bestDist) { bestDist = dist; bestLine = line; bestOver = pOver; }
-  }
-  return [
-    { key: 'OVER_CORNERS', label: `Over ${bestLine} corners`, prob: bestOver, odds: null },
-    { key: 'UNDER_CORNERS', label: `Under ${bestLine} corners`, prob: 1 - bestOver, odds: null },
+  const out: MarketProb[] = [];
+  const cfg: { line: number; over: MarketProb['key']; under: MarketProb['key'] }[] = [
+    { line: 10.5, over: 'OVER_CORNERS_10_5', under: 'UNDER_CORNERS_10_5' },
+    { line: 11.5, over: 'OVER_CORNERS_11_5', under: 'UNDER_CORNERS_11_5' },
+    { line: 12.5, over: 'OVER_CORNERS_12_5', under: 'UNDER_CORNERS_12_5' },
   ];
+  for (const c of cfg) {
+    const pOver = probAtLeast(Math.ceil(c.line));
+    out.push({ key: c.over, label: `Over ${c.line} corners`, prob: pOver, odds: null });
+    out.push({ key: c.under, label: `Under ${c.line} corners`, prob: 1 - pOver, odds: null });
+  }
+  return out;
 }
 
 function validOdds(o: number | null): number | null {
