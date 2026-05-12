@@ -16,7 +16,7 @@ import { analyzeMatch } from '@/lib/cento/engine';
 import type { LeagueStats, ParsedMatch, TeamProfile } from '@/lib/cento/footystats/types';
 import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { fuzzyMatch, normalizeTeamName } from '@/lib/cento/footystats/util';
-import { loadBankroll } from '@/lib/bankroll';
+import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
 import { Upload, Trash2, Database, Calendar, Trophy } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -30,7 +30,7 @@ export default function CentoPower() {
   const [loading, setLoading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const bankroll = loadBankroll();
+  const bankroll = (loadBankrollState() ?? getDefaultBankrollState()).currentBankroll;
 
   const reloadLeagues = async () => {
     if (!user) return;
