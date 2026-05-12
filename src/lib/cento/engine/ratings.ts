@@ -76,12 +76,25 @@ function volatility(team: TeamProfile): number {
   return clamp(20 + (switches / Math.max(f.length - 1, 1)) * 80);
 }
 
+function formFallback(team: TeamProfile): number {
+  // when no form string, derive from win% / ppg
+  if (team.winPct != null && team.lossPct != null) {
+    const draw = team.drawPct ?? Math.max(0, 100 - team.winPct - team.lossPct);
+    return clamp(team.winPct + draw * 0.5);
+  }
+  if (team.ppg != null) return clamp(15 + (team.ppg / 3) * 70);
+  return 50;
+}
+
 export function computeRatings(team: TeamProfile, league: LeagueStats | undefined, isHome: boolean): RatingBundle {
+  const formArr = team.form ?? [];
+  const formVal = formArr.length ? formScore(formArr) : formFallback(team);
+  const momentumVal = formArr.length >= 3 ? momentumScore(formArr) : formFallback(team);
   return {
     attack: attackScore(team, league?.goalsPerMatch ?? null),
     defense: defenseScore(team, league?.goalsPerMatch ?? null),
-    form: formScore(team.form ?? []),
-    momentum: momentumScore(team.form ?? []),
+    form: formVal,
+    momentum: momentumVal,
     matchTempo: 0, // computed at match level
     homeAdvantage: isHome ? clamp(50 + ((team.homeWins ?? 0) - (team.awayWins ?? 0)) * 5) : 50,
     defensiveStability: defensiveStability(team),
