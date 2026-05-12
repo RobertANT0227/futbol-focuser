@@ -7,6 +7,7 @@ import { QualityChip } from './QualityChip';
 import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { cn } from '@/lib/utils';
 import { deriveConfidence, CONFIDENCE_LABEL, type ConfidenceLevel } from '@/lib/bankroll';
+import { MatchAnalysisDialog } from './MatchAnalysisDialog';
 
 function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
 
@@ -57,16 +58,19 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
     <Card className="p-5 space-y-4 bg-gradient-to-b from-card to-card/40 border-border/60 backdrop-blur-sm">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-            <span>{leagueName ?? 'Liga'}</span>
-            <span>·</span>
-            <span>{fmtDate(match.date)}</span>
-          </div>
-          <h3 className="text-lg font-bold leading-tight">
-            {match.home} <span className="text-muted-foreground font-normal text-sm">vs</span> {match.away}
-          </h3>
-        </div>
+        <MatchAnalysisDialog a={a} leagueName={leagueName}>
+          <button className="space-y-1 text-left group" type="button">
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+              <span>{leagueName ?? 'Liga'}</span>
+              <span>·</span>
+              <span>{fmtDate(match.date)}</span>
+              <span className="ml-1 text-primary opacity-0 group-hover:opacity-100 transition">🔍 analiza pas cu pas</span>
+            </div>
+            <h3 className="text-lg font-bold leading-tight group-hover:text-primary transition">
+              {match.home} <span className="text-muted-foreground font-normal text-sm">vs</span> {match.away}
+            </h3>
+          </button>
+        </MatchAnalysisDialog>
         <div className="flex items-center gap-2">
           <QualityChip quality={quality} />
           <PickBadge grade={grade} />
