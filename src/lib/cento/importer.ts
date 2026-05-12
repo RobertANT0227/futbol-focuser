@@ -219,7 +219,7 @@ export function detectFileType(headers: string[], rowCount: number, map: Record<
   const { hasHomeAway, matchScore, teamSignals, leagueScore } = detectionDetails(headers, rowCount, map);
 
   // Required priority: MATCHES → TEAMS → LEAGUE.
-  if (hasHomeAway && matchScore >= 4) return 'match';
+  if (hasHomeAway && matchScore >= 3) return 'match';
   if (teamSignals.rawScore >= 5 || teamSignals.score >= 5 || (teamSignals.hasTeamName && rowCount >= 10) || (has('team') && teamSignals.rawScore >= 3)) return 'team';
   if (leagueScore >= 2 && !hasHomeAway) return 'league';
   if (hasHeader(headers, ['team_a_name']) && hasHeader(headers, ['team_b_name'])) return 'match';
