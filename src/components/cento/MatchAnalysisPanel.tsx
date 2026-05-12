@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Swords } from 'lucide-react';
 import { ValueBetCard } from './ValueBetCard';
 import { analyzeMatch } from '@/lib/cento/valueEngine';
 import type { CpMatch, CpTeam, ValueBet } from '@/lib/cento/types';
@@ -16,6 +15,8 @@ interface Props {
   kellyFraction: number;
   onSave?: (bet: ValueBet) => void;
 }
+
+const PREMIUM_WR = 0.76;
 
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 const num = (v: unknown): number | null => {
@@ -34,8 +35,8 @@ function StatPill({ label, value, accent }: { label: string; value: string; acce
 }
 
 function TeamCard({
-  side, name, style, stats, isHome,
-}: { side: string; name: string; style: string; stats: CpTeam['stats']; isHome: boolean }) {
+  side, name, stats, isHome,
+}: { side: string; name: string; stats: CpTeam['stats']; isHome: boolean }) {
   const ppg = num(stats.points_per_game) ?? num(stats.ppg);
   const pos = num(stats.league_position);
   const form = String(stats.form || '').slice(-5).toUpperCase();
@@ -57,7 +58,6 @@ function TeamCard({
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{side}</div>
           <div className="font-bold text-sm truncate">{name}</div>
         </div>
-        <Badge variant="outline" className="border-primary/40 text-primary text-[10px]">{style}</Badge>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {pos !== null && <StatPill label="Poziție" value={`#${pos}`} />}
