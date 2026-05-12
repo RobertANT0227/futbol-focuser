@@ -137,11 +137,12 @@ export async function importCsvFile(file: File, ctx: ImportContext): Promise<CpI
   const fromName = leagueFromFilename(file.name);
   let league = ctx.defaultLeague || fromName.league;
   let season = ctx.defaultSeason || fromName.season || '2024/25';
-  if (map.league && rows[0]) {
+  // Only fall back to in-file values if defaults were not explicitly provided
+  if (!ctx.defaultLeague && map.league && rows[0]) {
     const v = rows[0][map.league];
     if (v) league = String(v);
   }
-  if (map.season && rows[0]) {
+  if (!ctx.defaultSeason && map.season && rows[0]) {
     const v = rows[0][map.season];
     if (v) season = String(v);
   }
