@@ -42,6 +42,21 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
   const { match, ratingsHome: rh, ratingsAway: ra, probabilities, topMarket, confidence, grade, stakeUnits, quality, context, explanation, expectedGoalsHome, expectedGoalsAway, conflicts, homeTeam, awayTeam } = a;
   const confTier = powerToConfidence(a);
 
+  // De ce nu STRONG? (când grade-ul e MEDIUM sau RISKY)
+  const downgradeReasons: string[] = [];
+  if (grade === 'MEDIUM' || grade === 'RISKY') {
+    const sorted = [...probabilities].sort((x, y) => y.prob - x.prob);
+    const dispersion = sorted[0].prob - sorted[1].prob;
+    if (confidence < 75) downgradeReasons.push(`Confidence ${confidence}/100 sub pragul STRONG (75).`);
+    if (dispersion < 0.12) downgradeReasons.push(`Dispersie ${(dispersion * 100).toFixed(1)}% față de a 2-a piață — semnal nu suficient de clar.`);
+    if (quality.band === 'Good') downgradeReasons.push('Date `Good` (nu `Excellent`) — coverage parțial.');
+    if (quality.band === 'Limited') downgradeReasons.push('Date limitate — coverage redus.');
+    if (quality.smallSamplePenalty > 0.15) downgradeReasons.push(`Eșantion mic (${quality.sampleHome}/${quality.sampleAway} meciuri).`);
+    if (context.earlySeason) downgradeReasons.push('Început de sezon — modelul tinde spre media ligii.');
+    if (conflicts.length) downgradeReasons.push(`Conflict piețe: ${conflicts.join(' ')}`);
+    if (!topMarket.odds) downgradeReasons.push('Fără cote — nu pot confirma value, doar planul de tipster.');
+  }
+
   // Build human reason for PASS
   const passReasons: string[] = [];
   if (grade === 'PASS') {
@@ -123,6 +138,16 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
           <div className="font-bold text-destructive flex items-center gap-2">⛔ PASS — motivul pe scurt:</div>
           <ul className="text-xs text-foreground/90 space-y-0.5 pl-4 list-disc">
             {passReasons.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* De ce nu STRONG */}
+      {downgradeReasons.length > 0 && (
+        <div className="rounded-md border border-accent/30 bg-accent/5 p-2 text-[11px] space-y-0.5">
+          <div className="font-bold text-accent uppercase tracking-wider text-[10px]">De ce {grade}, nu STRONG?</div>
+          <ul className="text-foreground/85 space-y-0.5 pl-4 list-disc">
+            {downgradeReasons.map((r, i) => <li key={i}>{r}</li>)}
           </ul>
         </div>
       )}
