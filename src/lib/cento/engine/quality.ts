@@ -19,7 +19,7 @@ export function computeQuality(
     checks.push(has(t?.matchesPlayed) ? 1 : 0);
     checks.push(has(t?.goalsFor) ? 1 : 0);
     checks.push(has(t?.goalsAgainst) ? 1 : 0);
-    checks.push(t?.form && t.form.length >= 3 ? 1 : 0);
+    checks.push((t?.form && t.form.length >= 3) || has(t?.ppg) || has(t?.winPct) ? 1 : 0);
     checks.push(has(t?.over25Pct) ? 1 : 0);
     checks.push(has(t?.bttsPct) ? 1 : 0);
   }
