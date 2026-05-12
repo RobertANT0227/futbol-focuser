@@ -39,8 +39,27 @@ function fmtDate(d: string | null) {
 }
 
 export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName?: string }) {
-  const { match, ratingsHome: rh, ratingsAway: ra, probabilities, topMarket, confidence, grade, stakeUnits, quality, context, explanation, expectedGoalsHome, expectedGoalsAway } = a;
+  const { match, ratingsHome: rh, ratingsAway: ra, probabilities, topMarket, confidence, grade, stakeUnits, quality, context, explanation, expectedGoalsHome, expectedGoalsAway, conflicts, homeTeam, awayTeam } = a;
   const confTier = powerToConfidence(a);
+
+  // Build human reason for PASS
+  const passReasons: string[] = [];
+  if (grade === 'PASS') {
+    const sorted = [...probabilities].sort((x, y) => y.prob - x.prob);
+    const dispersion = sorted[0].prob - sorted[1].prob;
+    const impliedTop = sorted[0].odds && sorted[0].odds > 1 ? 1 / sorted[0].odds : null;
+    const edge = impliedTop !== null ? sorted[0].prob - impliedTop : null;
+    if (confidence < 50) passReasons.push(`Confidence ${confidence}/100 sub pragul 50.`);
+    if (dispersion < 0.04) passReasons.push(`Dispersie pick top doar ${(dispersion * 100).toFixed(1)}% — piețe prea apropiate.`);
+    if (edge !== null && edge < 0.01) passReasons.push(`Edge față de cotă ${(edge * 100).toFixed(1)}% — fără value.`);
+    if (edge === null) passReasons.push('Lipsă cote pe piața dominantă — nu pot calcula value.');
+    if (quality.band === 'Limited') passReasons.push('Acoperire date limitată.');
+    if (quality.smallSamplePenalty > 0.2) passReasons.push(`Eșantion mic (${quality.sampleHome}/${quality.sampleAway} meciuri).`);
+    if (!homeTeam) passReasons.push(`Nu am găsit profilul echipei "${match.home}" în CSV teams.`);
+    if (!awayTeam) passReasons.push(`Nu am găsit profilul echipei "${match.away}" în CSV teams.`);
+    if (conflicts.length) passReasons.push(`Conflict piețe: ${conflicts.length}.`);
+    if (passReasons.length === 0) passReasons.push('Niciun semnal cu edge clar — modelul preferă să nu recomande.');
+  }
 
   const formStrip = (form: string[]) => (
     <div className="flex gap-1">
