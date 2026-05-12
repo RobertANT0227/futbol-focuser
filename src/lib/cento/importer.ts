@@ -64,8 +64,10 @@ for (const [k, v] of Object.entries(EXTRA_ALIASES)) {
 const REQUIRED_SIGNALS = ['xg', 'xga', 'possession', 'shots', 'shots_on_target', 'corners', 'cards', 'btts_pct', 'over25_pct', 'ppg'];
 
 const cleanCsvHeader = (s: string) => String(s ?? '')
+  .replace(/^ï»¿/, '')
   .replace(/^\uFEFF/, '')
   .replace(/\uFEFF/g, '')
+  .replace(/[\u200B-\u200D\u2060\u00A0]/g, ' ')
   .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
   .replace(/\s+/g, ' ')
   .trim();
