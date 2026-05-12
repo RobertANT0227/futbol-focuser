@@ -52,7 +52,7 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
     if (confidence < 50) passReasons.push(`Confidence ${confidence}/100 sub pragul 50.`);
     if (dispersion < 0.04) passReasons.push(`Dispersie pick top doar ${(dispersion * 100).toFixed(1)}% — piețe prea apropiate.`);
     if (edge !== null && edge < 0.01) passReasons.push(`Edge față de cotă ${(edge * 100).toFixed(1)}% — fără value.`);
-    if (edge === null) passReasons.push('Lipsă cote pe piața dominantă — nu pot calcula value.');
+    if (edge === null) passReasons.push('Fără cote pe piața dominantă — evaluat doar pe planul de tipster (probabilitate + confidence).');
     if (quality.band === 'Limited') passReasons.push('Acoperire date limitată.');
     if (quality.smallSamplePenalty > 0.2) passReasons.push(`Eșantion mic (${quality.sampleHome}/${quality.sampleAway} meciuri).`);
     if (!homeTeam) passReasons.push(`Nu am găsit profilul echipei "${match.home}" în CSV teams.`);
@@ -102,7 +102,9 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
           <div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Final Pick</div>
             <div className="text-base font-bold">{topMarket.label} <span className="font-mono text-primary">{fmtPct(topMarket.prob)}</span></div>
-            {topMarket.odds && <div className="text-[11px] text-muted-foreground font-mono">cota {topMarket.odds.toFixed(2)}</div>}
+            <div className="text-[11px] text-muted-foreground font-mono">
+              {topMarket.odds ? `cota ${topMarket.odds.toFixed(2)}` : 'fără cotă disponibilă'}
+            </div>
           </div>
           <div className="text-right">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Confidence</div>
@@ -145,7 +147,7 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
             )}>
               <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{p.label}</div>
               <div className="text-sm font-mono font-bold">{fmtPct(p.prob)}</div>
-              {p.odds && <div className="text-[9px] text-muted-foreground font-mono">@{p.odds.toFixed(2)}</div>}
+              <div className="text-[9px] text-muted-foreground/70 font-mono">{p.odds ? `@${p.odds.toFixed(2)}` : 'fără cotă'}</div>
             </div>
           ))}
         </div>
