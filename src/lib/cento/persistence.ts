@@ -52,7 +52,7 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
 
   let leagueId = existing?.id ?? '';
   const prevStats = (existing?.league_stats && typeof existing.league_stats === 'object') ? existing.league_stats as Record<string, unknown> : {};
-  const leagueStatsPayload = bundle.league
+  const leagueStatsPayload: any = bundle.league
     ? { ...prevStats, ...bundle.league }
     : prevStats;
 
@@ -83,7 +83,7 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
       .update({
         name: meta.leagueName,
         country: meta.country,
-        league_stats: leagueStatsPayload,
+        league_stats: leagueStatsPayload as any,
         has_league_stats: existing.has_league_stats || !!bundle.league,
       })
       .eq('id', leagueId);
@@ -106,7 +106,7 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
         seen.add(key);
         return true;
       })
-      .map((m) => ({
+      .map((m): any => ({
         owner_id: userId,
         league_id: leagueId,
         home: m.home,
@@ -118,7 +118,7 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
           oddsBttsYes: m.oddsBttsYes, oddsBttsNo: m.oddsBttsNo,
           oddsOver25: m.oddsOver25, oddsUnder25: m.oddsUnder25,
         },
-        stats: m as unknown as Record<string, unknown>,
+        stats: m,
       }));
     if (toInsert.length) {
       const { error } = await supabase.from('cp_matches').insert(toInsert);
@@ -143,14 +143,14 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
     for (const t of bundle.teams) {
       const id = byName.get(normName(t.name));
       if (id) updates.push({ id, stats: t });
-      else inserts.push({ owner_id: userId, league_id: leagueId, name: t.name, stats: t as unknown as Record<string, unknown>, tags: [] });
+      else inserts.push({ owner_id: userId, league_id: leagueId, name: t.name, stats: t, tags: [] });
     }
     if (inserts.length) {
       const { error } = await supabase.from('cp_teams').insert(inserts);
       if (error) throw error;
     }
     for (const u of updates) {
-      await supabase.from('cp_teams').update({ stats: u.stats as Record<string, unknown> }).eq('id', u.id);
+      await supabase.from('cp_teams').update({ stats: u.stats as any }).eq('id', u.id);
     }
     await supabase
       .from('cp_leagues')
