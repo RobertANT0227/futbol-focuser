@@ -423,8 +423,12 @@ export function groupBundles(peeked: ParsedLeagueCsv[]): LeagueImportPackage[] {
     const leagueCov = avgCoverage(b.entries.filter((e) => e.detectedType === 'league'));
     const matchCov = avgCoverage(b.entries.filter((e) => e.detectedType === 'match'));
     const teamCov = avgCoverage(b.entries.filter((e) => e.detectedType === 'team'));
-    const active = [leagueCov, matchCov, teamCov].filter((v) => v > 0);
-    b.coverage = { leagueData: leagueCov, matchData: matchCov, teamData: teamCov, overall: active.length ? Math.round(active.reduce((a, v) => a + v, 0) / active.length) : 0 };
+    if (b.importStatus.hasLeagueStats && b.importStatus.hasMatches && b.importStatus.hasTeams) {
+      b.coverage = { leagueData: 100, matchData: 100, teamData: 100, overall: 100 };
+    } else {
+      const active = [leagueCov, matchCov, teamCov].filter((v) => v > 0);
+      b.coverage = { leagueData: leagueCov, matchData: matchCov, teamData: teamCov, overall: active.length ? Math.round(active.reduce((a, v) => a + v, 0) / active.length) : 0 };
+    }
     return b;
   });
 }
@@ -478,7 +482,14 @@ export async function importLeaguePackage(bundle: LeagueImportPackage, ctx: Impo
     matchData: (matchesCount || 0) > 0 ? Math.max(bundle.coverage.matchData, Number((existing?.coverage as Record<string, unknown> | null)?.matchData || 0)) : 0,
     teamData: (teamsCount || 0) > 0 ? Math.max(bundle.coverage.teamData, Number((existing?.coverage as Record<string, unknown> | null)?.teamData || 0)) : 0,
   };
-  coverage.overall = Math.round(([coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).reduce((a, v) => a + v, 0) || 0) / Math.max(1, [coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).length));
+  if (coverage.leagueData > 0 && coverage.matchData > 0 && coverage.teamData > 0) {
+    coverage.leagueData = 100;
+    coverage.matchData = 100;
+    coverage.teamData = 100;
+    coverage.overall = 100;
+  } else {
+    coverage.overall = Math.round(([coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).reduce((a, v) => a + v, 0) || 0) / Math.max(1, [coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).length));
+  }
 
   const updatePayload: LeagueUpdate = {
     has_league_stats: flags.hasLeagueStats,
