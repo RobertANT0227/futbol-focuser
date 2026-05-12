@@ -6,6 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarUI } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { UploadCenter } from '@/components/cento/UploadCenter';
 import { PowerMatchCard } from '@/components/cento/PowerMatchCard';
 import { PickBadge } from '@/components/cento/PickBadge';
@@ -30,6 +34,7 @@ export default function CentoPower() {
   const [loading, setLoading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const bankroll = (loadBankrollState() ?? getDefaultBankrollState()).currentBankroll;
 
   const reloadLeagues = async () => {
@@ -80,6 +85,10 @@ export default function CentoPower() {
   }, [activeLeague, data]);
 
   const filtered = analyses.filter((x) => {
+    if (selectedDate) {
+      const day = format(selectedDate, 'yyyy-MM-dd');
+      if ((x.analysis.match.date ?? '') !== day) return false;
+    }
     if (!search) return true;
     const s = search.toLowerCase();
     return x.analysis.match.home.toLowerCase().includes(s) || x.analysis.match.away.toLowerCase().includes(s);
@@ -157,7 +166,29 @@ export default function CentoPower() {
                 </SelectContent>
               </Select>
               <Input placeholder="Caută echipă..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
-              <Badge variant="outline" className="font-mono text-[10px]">{filtered.length} meciuri viitoare</Badge>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn('justify-start text-left font-normal gap-2', !selectedDate && 'text-muted-foreground')}>
+                    <Calendar className="h-4 w-4" />
+                    {selectedDate ? format(selectedDate, 'PPP') : 'Toate zilele'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarUI
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    initialFocus
+                    className={cn('p-3 pointer-events-auto')}
+                  />
+                  <div className="p-2 border-t flex justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedDate(undefined)}>Șterge filtru</Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <Badge variant="outline" className="font-mono text-[10px]">
+                {filtered.length} {selectedDate ? `meciuri pe ${format(selectedDate, 'dd MMM')}` : 'meciuri viitoare'}
+              </Badge>
             </div>
             {loading ? (
               <Card className="p-6 text-center text-sm text-muted-foreground">Se încarcă...</Card>
