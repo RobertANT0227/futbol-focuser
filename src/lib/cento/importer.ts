@@ -35,7 +35,7 @@ const num = (v: unknown, fallback: number | undefined = undefined): number | und
   return Number.isFinite(n) ? n : fallback;
 };
 
-function detectFileType(headers: string[], rowCount: number, map: Record<string, string>): CpFileType {
+export function detectFileType(headers: string[], rowCount: number, map: Record<string, string>): CpFileType {
   const has = (k: string) => Boolean(map[k]);
   if (has('home') && has('away')) return 'match';
   if (has('team') && rowCount >= 4 && (has('goals_scored') || has('xg') || has('matches_played'))) return 'league';
@@ -44,7 +44,7 @@ function detectFileType(headers: string[], rowCount: number, map: Record<string,
 }
 
 // Try to extract league name from filename: "premier-league_2024-25.csv" -> Premier League / 2024/25
-function leagueFromFilename(name: string): { league?: string; season?: string } {
+export function leagueFromFilename(name: string): { league?: string; season?: string } {
   const base = name.replace(/\.[a-z]+$/i, '').replace(/[_\-]+/g, ' ');
   const seasonMatch = base.match(/(20\d{2})\s*[\/\-]\s*(20)?(\d{2})/);
   let season: string | undefined;
@@ -55,12 +55,69 @@ function leagueFromFilename(name: string): { league?: string; season?: string } 
   }
   const leagueWords = base
     .replace(/(20\d{2})\s*[\/\-]\s*(20)?(\d{2})/g, '')
-    .replace(/\b(csv|xlsx|league|table|matches|fixtures|stats)\b/gi, '')
+    .replace(/\b(csv|xlsx|league|table|matches|match|fixtures|fixture|stats|stat|team|teams|squad|squads|h2h|data|export|footystats|all)\b/gi, '')
     .replace(/\s+/g, ' ').trim();
   return { league: leagueWords ? toTitle(leagueWords) : undefined, season };
 }
 
 const toTitle = (s: string) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Lightweight inspection of a file: returns detected type + league + season, no DB writes. */
+export interface PeekedFile {
+  file: File;
+  detectedLeague?: string;
+  detectedSeason?: string;
+  detectedType: CpFileType;
+  rowCount: number;
+}
+
+export async function peekCsv(file: File): Promise<PeekedFile> {
+  const text = await file.text();
+  const res = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true });
+  const rows = (res.data || []).filter((r) => Object.values(r).some((v) => v !== '' && v != null));
+  const headers = res.meta.fields || [];
+  const map = autoMapColumns(headers);
+  const fileType = detectFileType(headers, rows.length, map);
+  const fromName = leagueFromFilename(file.name);
+  let league = fromName.league;
+  let season = fromName.season;
+  if (map.league && rows[0]) { const v = rows[0][map.league]; if (v) league = String(v); }
+  if (map.season && rows[0]) { const v = rows[0][map.season]; if (v) season = String(v); }
+  return { file, detectedLeague: league, detectedSeason: season, detectedType: fileType, rowCount: rows.length };
+}
+
+/** Group peeked files into bundles by normalized league + season. */
+export interface FileBundle {
+  key: string;
+  league: string;
+  season: string;
+  files: PeekedFile[];
+  hasLeague: boolean;
+  hasMatches: boolean;
+  hasTeam: boolean;
+}
+
+function normKey(s?: string) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+}
+
+export function groupBundles(peeked: PeekedFile[]): FileBundle[] {
+  const map = new Map<string, FileBundle>();
+  for (const p of peeked) {
+    const league = p.detectedLeague || 'Unknown League';
+    const season = p.detectedSeason || '2024/25';
+    const key = `${normKey(league)}::${normKey(season)}`;
+    if (!map.has(key)) {
+      map.set(key, { key, league, season, files: [], hasLeague: false, hasMatches: false, hasTeam: false });
+    }
+    const b = map.get(key)!;
+    b.files.push(p);
+    if (p.detectedType === 'league') b.hasLeague = true;
+    if (p.detectedType === 'match') b.hasMatches = true;
+    if (p.detectedType === 'team') b.hasTeam = true;
+  }
+  return Array.from(map.values());
+}
 
 export interface ImportContext {
   ownerId: string;
