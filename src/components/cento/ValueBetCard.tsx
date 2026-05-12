@@ -1,9 +1,11 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Bookmark, TrendingUp, Swords } from 'lucide-react';
+import { Bookmark, TrendingUp, Swords, AlertTriangle } from 'lucide-react';
 import type { ValueBet } from '@/lib/cento/types';
 import { EdgeBar, ConfidenceBar } from './EdgeBar';
 import { RiskBadge } from './RiskBadge';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface Props {
   bet: ValueBet;
@@ -27,7 +29,27 @@ export function ValueBetCard({ bet, onSave }: Props) {
             <span>{bet.awayStyle}</span>
           </div>
         </div>
-        <RiskBadge risk={bet.risk} />
+        <div className="flex flex-col items-end gap-1">
+          <RiskBadge risk={bet.risk} />
+          {bet.dataReliability !== 'high' && (
+            <Badge
+              variant="outline"
+              title={bet.missingStats.length ? `Lipsesc: ${bet.missingStats.join(', ')}` : ''}
+              className={cn(
+                'uppercase text-[9px] tracking-wider font-semibold border flex items-center gap-1',
+                bet.dataReliability === 'low'
+                  ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+              )}
+            >
+              <AlertTriangle className="h-2.5 w-2.5" />
+              {bet.dataReliability === 'low' ? 'Low Data' : 'Partial Data'}
+              <span className="font-mono opacity-70">
+                {Math.round(bet.dataCompleteness * 100)}%
+              </span>
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="rounded-md bg-background/50 border border-border/40 p-3 mb-3">
