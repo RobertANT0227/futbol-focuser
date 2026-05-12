@@ -1,5 +1,5 @@
 import type { LeagueStats, ParsedMatch, TeamProfile } from '@/lib/cento/footystats/types';
-import { computeLambdas, computeMarketProbs } from './probabilities';
+import { computeLambdas, computeMarketProbs, computeCornerMarkets } from './probabilities';
 import { computeRatings, computeMatchTempo } from './ratings';
 import { computeQuality } from './quality';
 import type {
@@ -76,6 +76,8 @@ export function analyzeMatch(
     match.oddsBttsYes, match.oddsBttsNo,
     match.oddsOver25, match.oddsUnder25,
   );
+  const cornerMarkets = computeCornerMarkets(homeT, awayT, league);
+  if (cornerMarkets) probs.push(...cornerMarkets);
   const quality = computeQuality(home, away, league, match);
 
   // strongest pick = highest prob (tipster, not value)
@@ -136,6 +138,7 @@ function emptyTeam(name: string): TeamProfile {
     bttsPct: null, over25Pct: null, under25Pct: null,
     homePlayed: null, homeWins: null, homeDraws: null, homeLosses: null, homeGFAvg: null, homeGAAvg: null, homeBttsPct: null, homeOver25Pct: null,
     awayPlayed: null, awayWins: null, awayDraws: null, awayLosses: null, awayGFAvg: null, awayGAAvg: null, awayBttsPct: null, awayOver25Pct: null,
+    cornersForAvg: null, cornersAgainstAvg: null, cornersForHome: null, cornersAgainstHome: null, cornersForAway: null, cornersAgainstAway: null,
     form: [], shotsAvg: null, shotsOTAvg: null, shotsConcededAvg: null, attackingEff: null, defensiveEff: null, fts2score: null,
     scoringFirstHalfPct: null, scoringSecondHalfPct: null, concedingFirstHalfPct: null, concedingSecondHalfPct: null,
     xgFor: null, xgAgainst: null, xgForHome: null, xgForAway: null, xgAgainstHome: null, xgAgainstAway: null,

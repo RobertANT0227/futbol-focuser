@@ -100,6 +100,13 @@ export interface TeamProfile {
   awayGAAvg: number | null;
   awayBttsPct: number | null;
   awayOver25Pct: number | null;
+  // corners (overall + splits)
+  cornersForAvg: number | null;
+  cornersAgainstAvg: number | null;
+  cornersForHome: number | null;
+  cornersAgainstHome: number | null;
+  cornersForAway: number | null;
+  cornersAgainstAway: number | null;
   // form (latest 5/6 results, "W"/"D"/"L")
   form: string[];                 // most recent first
   // efficiency

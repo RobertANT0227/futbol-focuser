@@ -155,11 +155,13 @@ export default function CentoPower() {
   });
 
   const topPicks = useMemo(() => {
+    const day = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null;
     return allAnalyses
       .filter((x) => x.analysis.grade === 'STRONG' || x.analysis.grade === 'MEDIUM')
+      .filter((x) => !day || (x.analysis.match.date ?? '') === day)
       .sort((a, b) => b.analysis.confidence - a.analysis.confidence)
       .slice(0, 50);
-  }, [allAnalyses]);
+  }, [allAnalyses, selectedDate]);
 
   const handleDeleteLeague = async (id: string) => {
     if (!confirm('Ștergi această ligă și toate datele?')) return;
