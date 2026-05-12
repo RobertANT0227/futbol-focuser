@@ -120,18 +120,33 @@ export interface EngineOptions {
   maxStakePct: number;   // cap (e.g. 0.05)
 }
 
-export function buildValueBets(
+export interface MatchAnalysis {
+  lh: number; la: number;
+  pHome: number; pDraw: number; pAway: number;
+  pOver25: number; pBtts: number;
+  expectedCorners: number | null;
+  expectedCards: number | null;
+  psH: PrimaryStyle; psA: PrimaryStyle;
+  clash: boolean;
+  reliability: 'high'|'medium'|'low';
+  completeness: number;
+  missingStats: string[];
+  usedStats: string[];
+  bets: ValueBet[];
+}
+
+export function analyzeMatch(
   match: CpMatch,
   homeTeam: CpTeam,
   awayTeam: CpTeam,
   opts: EngineOptions,
-): ValueBet[] {
+): MatchAnalysis | null {
   const report: DataReport = { used: new Set(), missing: new Set() };
   const Lh = teamLambda(homeTeam, awayTeam, true, report);
   const La = teamLambda(awayTeam, homeTeam, false, report);
 
   // If we have absolutely no goal/xG signal on either side, abort: no fake data.
-  if (Lh.lambda === null || La.lambda === null) return [];
+  if (Lh.lambda === null || La.lambda === null) return null;
   const lh = Lh.lambda, la = La.lambda;
   const m = poissonMatrix(lh, la);
 
@@ -172,9 +187,11 @@ export function buildValueBets(
   // Corners — only if BOTH teams have corner data (no fake fallback)
   const cph = n(homeTeam.stats.corners) ?? n(homeTeam.stats.corners_per_match);
   const cpa = n(awayTeam.stats.corners) ?? n(awayTeam.stats.corners_per_match);
+  let expectedCorners: number | null = null;
   if (cph !== null && cpa !== null) {
     pick(report, 'H', 'corners', cph); pick(report, 'A', 'corners', cpa);
     const cornersLambda = cph + cpa;
+    expectedCorners = cornersLambda;
     let cdf = 0;
     for (let k = 0; k <= 9; k++) cdf += pois(cornersLambda, k);
     const pOver95Corners = 1 - cdf;
@@ -188,9 +205,11 @@ export function buildValueBets(
   // Cards — only if BOTH teams have card data
   const cdh = n(homeTeam.stats.cards) ?? n(homeTeam.stats.cards_per_match);
   const cda = n(awayTeam.stats.cards) ?? n(awayTeam.stats.cards_per_match);
+  let expectedCards: number | null = null;
   if (cdh !== null && cda !== null) {
     pick(report, 'H', 'cards', cdh); pick(report, 'A', 'cards', cda);
     const cardsLambda = cdh + cda;
+    expectedCards = cardsLambda;
     let ccdf = 0;
     for (let k = 0; k <= 4; k++) ccdf += pois(cardsLambda, k);
     const pOver45Cards = 1 - ccdf;
@@ -262,5 +281,25 @@ export function buildValueBets(
 
   // Best-value first per match
   out.sort((a, b) => b.edge - a.edge);
-  return out;
+  return {
+    lh, la,
+    pHome: m.pHome, pDraw: m.pDraw, pAway: m.pAway,
+    pOver25, pBtts,
+    expectedCorners, expectedCards,
+    psH, psA, clash,
+    reliability, completeness,
+    missingStats: Array.from(report.missing),
+    usedStats: Array.from(report.used),
+    bets: out,
+  };
+}
+
+export function buildValueBets(
+  match: CpMatch,
+  homeTeam: CpTeam,
+  awayTeam: CpTeam,
+  opts: EngineOptions,
+): ValueBet[] {
+  const a = analyzeMatch(match, homeTeam, awayTeam, opts);
+  return a ? a.bets : [];
 }
