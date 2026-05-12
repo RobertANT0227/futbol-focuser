@@ -60,6 +60,20 @@ export function computeLambdas(
   let lambdaHome = ((homeGF / Math.max(lgHomeAvg, 0.6)) * (awayGA / Math.max(lgAwayAvg, 0.6)) * lgHomeAvg);
   let lambdaAway = ((awayGF / Math.max(lgAwayAvg, 0.6)) * (homeGA / Math.max(lgHomeAvg, 0.6)) * lgAwayAvg);
 
+  // Blend in xG if available (50/50 when both sides present)
+  const xgHomeFor = home.xgForHome ?? home.xgFor;
+  const xgAwayAgainst = away.xgAgainstAway ?? away.xgAgainst;
+  const xgAwayFor = away.xgForAway ?? away.xgFor;
+  const xgHomeAgainst = home.xgAgainstHome ?? home.xgAgainst;
+  if (xgHomeFor !== null && xgAwayAgainst !== null) {
+    const xgLambdaHome = (xgHomeFor + xgAwayAgainst) / 2;
+    lambdaHome = lambdaHome * 0.5 + xgLambdaHome * 0.5;
+  }
+  if (xgAwayFor !== null && xgHomeAgainst !== null) {
+    const xgLambdaAway = (xgAwayFor + xgHomeAgainst) / 2;
+    lambdaAway = lambdaAway * 0.5 + xgLambdaAway * 0.5;
+  }
+
   // shrink toward league baseline by sample reliability
   lambdaHome = lambdaHome * sH + lgHomeAvg * (1 - sH);
   lambdaAway = lambdaAway * sA + lgAwayAvg * (1 - sA);
@@ -71,7 +85,8 @@ export function computeLambdas(
   lambdaAway *= 1 + formAdjA;
 
   // home advantage modifier
-  lambdaHome *= 1.05;
+  const haBoost = league?.homeAdvantagePct != null ? 1 + league.homeAdvantagePct / 1000 : 1.05;
+  lambdaHome *= haBoost;
 
   return { lambdaHome: Math.max(0.15, lambdaHome), lambdaAway: Math.max(0.1, lambdaAway), lowSample };
 }
