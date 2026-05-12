@@ -26,7 +26,6 @@ const SPECS: Record<'league' | 'matches' | 'teams', CoverageSpec[]> = {
     { label: 'goluri acasă/deplasare ligă', keys: ['homeGoalsAvg', 'awayGoalsAvg'] },
     { label: 'procente Over 2.5', keys: ['over25Pct'] },
     { label: 'procente BTTS', keys: ['bttsPct'] },
-    { label: 'procente 1X2 ligă', keys: ['homeWinPct', 'drawPct', 'awayWinPct'] },
     { label: 'cornere pe meci', keys: ['cornersPerMatch'] },
     { label: 'xG mediu ligă', keys: ['xgPerMatch'] },
   ],
