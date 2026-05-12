@@ -3,9 +3,18 @@ export type CpFileType = 'league' | 'team' | 'h2h' | 'match' | 'unknown';
 export interface CpLeague {
   id: string;
   name: string;
+  normalized_name?: string;
   country: string | null;
   season: string;
+  has_league_stats?: boolean;
+  has_matches?: boolean;
+  has_teams?: boolean;
+  league_stats?: Record<string, unknown>;
+  matches_count?: number;
+  teams_count?: number;
+  coverage?: Record<string, unknown>;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface CpTeamStats {
