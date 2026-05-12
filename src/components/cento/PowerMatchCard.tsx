@@ -6,7 +6,7 @@ import { RatingBar } from './RatingBar';
 import { QualityChip } from './QualityChip';
 import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { cn } from '@/lib/utils';
-import { deriveConfidence, CONFIDENCE_LABEL, type ConfidenceLevel } from '@/lib/bankroll';
+import { CONFIDENCE_LABEL, type ConfidenceLevel } from '@/lib/bankroll';
 import { MatchAnalysisDialog } from './MatchAnalysisDialog';
 
 function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
