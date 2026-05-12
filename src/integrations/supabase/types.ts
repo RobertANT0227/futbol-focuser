@@ -127,29 +127,53 @@ export type Database = {
       cp_leagues: {
         Row: {
           country: string | null
+          coverage: Json
           created_at: string
+          has_league_stats: boolean
+          has_matches: boolean
+          has_teams: boolean
           id: string
+          league_stats: Json
+          matches_count: number
           name: string
+          normalized_name: string
           owner_id: string
           season: string
+          teams_count: number
           updated_at: string
         }
         Insert: {
           country?: string | null
+          coverage?: Json
           created_at?: string
+          has_league_stats?: boolean
+          has_matches?: boolean
+          has_teams?: boolean
           id?: string
+          league_stats?: Json
+          matches_count?: number
           name: string
+          normalized_name: string
           owner_id: string
           season?: string
+          teams_count?: number
           updated_at?: string
         }
         Update: {
           country?: string | null
+          coverage?: Json
           created_at?: string
+          has_league_stats?: boolean
+          has_matches?: boolean
+          has_teams?: boolean
           id?: string
+          league_stats?: Json
+          matches_count?: number
           name?: string
+          normalized_name?: string
           owner_id?: string
           season?: string
+          teams_count?: number
           updated_at?: string
         }
         Relationships: []
@@ -361,6 +385,10 @@ export type Database = {
       }
       is_account_active: { Args: { _user_id: string }; Returns: boolean }
       is_premium_or_owner: { Args: { _user_id: string }; Returns: boolean }
+      refresh_cp_league_rollup: {
+        Args: { _league_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       account_type: "trial" | "premium"
