@@ -1,5 +1,5 @@
 import type { LeagueStats, ParsedMatch, TeamProfile } from '@/lib/cento/footystats/types';
-import { computeLambdas, computeMarketProbs } from './probabilities';
+import { computeLambdas, computeMarketProbs, computeCornerMarkets } from './probabilities';
 import { computeRatings, computeMatchTempo } from './ratings';
 import { computeQuality } from './quality';
 import type {
@@ -76,6 +76,8 @@ export function analyzeMatch(
     match.oddsBttsYes, match.oddsBttsNo,
     match.oddsOver25, match.oddsUnder25,
   );
+  const cornerMarkets = computeCornerMarkets(homeT, awayT, league);
+  if (cornerMarkets) probs.push(...cornerMarkets);
   const quality = computeQuality(home, away, league, match);
 
   // strongest pick = highest prob (tipster, not value)
