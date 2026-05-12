@@ -10,9 +10,10 @@ import { cn } from '@/lib/utils';
 interface Props {
   bet: ValueBet;
   onSave?: (bet: ValueBet) => void;
+  hideStyles?: boolean;
 }
 
-export function ValueBetCard({ bet, onSave }: Props) {
+export function ValueBetCard({ bet, onSave, hideStyles }: Props) {
   return (
     <Card className="p-4 bg-card/60 backdrop-blur-sm border-border/60 hover:border-primary/40 transition-all group">
       <div className="flex items-start justify-between mb-3">
@@ -23,11 +24,13 @@ export function ValueBetCard({ bet, onSave }: Props) {
           <div className="font-semibold text-sm truncate">
             {bet.home} <span className="text-muted-foreground font-normal">vs</span> {bet.away}
           </div>
-          <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-            <span>{bet.homeStyle}</span>
-            {bet.styleClash && <Swords className="h-3 w-3 text-accent" />}
-            <span>{bet.awayStyle}</span>
-          </div>
+          {!hideStyles && (
+            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+              <span>{bet.homeStyle}</span>
+              {bet.styleClash && <Swords className="h-3 w-3 text-accent" />}
+              <span>{bet.awayStyle}</span>
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1">
           <RiskBadge risk={bet.risk} />
