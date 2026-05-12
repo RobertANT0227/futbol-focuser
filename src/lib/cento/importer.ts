@@ -135,7 +135,7 @@ function detectAliases(headers: string[], aliases: Record<string, string[]>, all
   for (const [canonical, variants] of Object.entries(aliases)) {
     const normalizedVariants = [canonical, ...variants].map(normalizeHeaderKey);
     const exact = normalizedVariants.some((v) => headerSet.has(v));
-    const fuzzy = allowFuzzy && normalizedVariants.some((v) => {
+    const fuzzy = allowFuzzy && canonical !== 'team_name' && normalizedVariants.some((v) => {
       const tokens = v.split('_').filter((t) => t.length > 1);
       return tokens.length >= 2 && normalized.some((h) => tokens.every((t) => h.split('_').includes(t)));
     });
