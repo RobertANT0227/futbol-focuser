@@ -96,4 +96,9 @@ export interface ValueBet {
   awayStyle: string;
   suggestedStakePct: number; // 0..0.05 Kelly fractional
   suggestedStakeLei: number;
+  // Data quality
+  dataReliability: 'high' | 'medium' | 'low';
+  dataCompleteness: number; // 0..1
+  missingStats: string[];   // canonical names that were unavailable
+  usedStats: string[];      // canonical names that contributed
 }
