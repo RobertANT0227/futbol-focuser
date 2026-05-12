@@ -1,517 +1,113 @@
-## Cento Power — Modul Premium Analiză Tipster
+## Cento Power v2 — Professional Football Intelligence Terminal
 
-Reconstruim de la zero modulul `/cento-power` (premium-only) ca terminal profesional de analiză tipster, folosind cele 3 CSV-uri FootyStats per ligă (league + matches + teams) combinate într-un singur sezon.
+Transformăm pagina actuală `/cento-power` într-un terminal premium multi-league, persistent, cu motor de value betting și bankroll integration. Restul aplicației (Dashboard, Bankroll Manager, Admin) rămâne neschimbat.
 
 ---
 
-### 1. Bază de date (refolosim tabelele existente `cp_*`)
+### 1. Persistență multi-league (Lovable Cloud)
 
-Tabelele `cp_leagues`, `cp_teams`, `cp_matches`, `cp_imports` există deja și au RLS premium. Le folosim ca atare:
+Tabele noi (RLS: doar `owner` + `premium`):
 
-- `cp_leagues` — o linie per (owner, ligă normalizată, sezon). Coloanele `has_league_stats / has_teams / has_matches` + `league_stats jsonb` reflectă acoperirea celor 3 fișiere. Trigger-ul `refresh_cp_league_rollup` rămâne.
-- `cp_teams` — `stats jsonb` cu TOATE câmpurile FootyStats (form, GF/GA, BTTS%, FTS%, HT, splits, timings, corners, cards, eficiențe).
-- `cp_matches` — un row per fixture cu `match_date`, `home`, `away`, `odds jsonb`, `stats jsonb` (HT, attendance, pre-match averages, BTTS, O/U, etc.).
-- `cp_imports` — log audit per fișier (file_type, rows, duplicates).
+- `cp_leagues` — `id, name, country, season, created_at, owner_id`
+- `cp_teams` — `id, league_id, name, playstyle, stats jsonb, updated_at` (unique league_id+name)
+- `cp_matches` — `id, league_id, season, match_date, home, away, stats jsonb, odds jsonb, source_batch_id` (unique key: `league_id+season+match_date+home+away` → upsert, fără duplicate)
+- `cp_imports` — `id, league_id, season, file_type, rows_imported, created_at, owner_id`
+- `cp_watchlist` — `id, owner_id, payload jsonb, created_at`
 
-**Upsert key**: leagues = (owner_id, normalized_name, season); teams = (league_id, name); matches = (league_id, season, match_date, home, away). Niciodată nu suprascriem alte ligi/sezoane.
+Toate cu RLS: `has_role(auth.uid(),'owner')` SAU `account_type IN ('owner','premium')` via `account_meta`.
 
-Nicio migrație nouă necesară decât dacă lipsesc indexuri unice — dacă da, adăugăm un singur migration cu `CREATE UNIQUE INDEX IF NOT EXISTS`.
+### 2. Multi-file Upload Engine (`src/lib/cento/importer.ts`)
 
-### 2. Upload System — Multi-file group sync
+- Drag & drop multi-file, parse paralel cu `papaparse`.
+- Detect automat: `league` (din nume fișier sau coloană), `season`, `file_type` (League / Team / H2H / Match) — **fără** a afișa parser logs sau "columns detected".
+- Merge inteligent prin upsert pe unique key. Reîncărcare = update + skip duplicates.
+- UI: progress card minimal ("Imported 3 leagues · 482 matches · 0 duplicates").
 
-`src/components/cento/ImportDropzone.tsx`:
+### 3. CSV Understanding Engine (extins)
 
-- Drag & drop simultan 3 fișiere.
-- Auto-detect din nume fișier: țară + ligă + sezon (`spain-la-liga-...-2025-to-2026-stats.csv` → "Spain La Liga", "2025/2026") + tip (`-league-`, `-matches-`, `-teams-`).
-- Fallback: detect tip prin coloane (heuristici interne, fără afișare).
-- Normalizează `2025-to-2026` → `2025/2026`.
-- Grupează fișierele în „ligă pending”, le parsează în paralel cu `papaparse`, face upsert în Supabase pe cheile unique.
-- UI: progress per fișier + un singur toast final: „La Liga 2025/2026 — successfully synced (20 teams · 380 matches)”.
-- Zero loguri tehnice, zero „Unknown / Columns detected”.
+Extind `COLUMN_ALIASES` din `src/lib/csvScanner.ts` cu: xG, xGA, possession, shots, SOT, shots off, fouls, corners, cards, BTTS%, Over/Under %, HT stats, clean sheets, scoring/conceding timing, home/away splits, PPG, league position, form, dangerous attacks, attacking/defensive intensity. Normalizare automată %, virgule, totaluri vs per-meci.
 
-### 3. CSV Smart Parser (`src/lib/cento/parser.ts`)
+### 4. Auto Playstyle Engine (`src/lib/cento/playstyle.ts`)
 
-Trei parsere dedicate (extind aliasurile din `csvScanner.ts`):
-
-- **leagueParser** — agregate de ligă: avg goals, O/U%, BTTS%, tempo, home advantage, clean sheets, scoring intervals, cards, corners → salvate în `cp_leagues.league_stats`.
-- **teamsParser** — per echipă: form, points, WR, GF/GA, CS, BTTS%, FTS%, HT perf, home/away splits, scoring/conceding timings, corners, cards, O/U%, FTS%, attacking/defensive efficiency → `cp_teams.stats`.
-- **matchesParser** — per fixture: date, teams, result, odds 1X2 + O/U + BTTS, HT stats, attendance, stadium, timings, pre-match averages → `cp_matches`.
-
-Toate câmpurile lipsă rămân `null` (nu se aruncă erori).
-
-### 4. Missing Data System
-
-În motorul de analiză (vezi §5), fiecare metric are pondere implicită. Dacă un metric e `null` (ex: cornere/cartonașe în ligi inferioare):
-
-- nu blochează nimic;
-- ponderea e redistribuită proporțional pe metricii disponibili;
-- coverage scade (vezi §8).
-
-### 5. Analysis Engine (`src/lib/cento/engine.ts`)
-
-Pentru fiecare match (acasă vs deplasare în aceeași ligă/sezon):
-
-**Rating-uri (0–100, normalizate pe ligă)**:
-
-- Attack Rating, Defense Rating (din GF/GA + xG dacă există + eficiență)
-- Form Rating (ultimele 5–6 cu decay exponențial)
-- Momentum Rating (trend ultimele 3 vs precedente 3)
-- Match Tempo (din shots+DA+goals/match medii ale celor 2)
-- Home Advantage Score (split home GF/GA vs media ligii)
-- Defensive Stability (varianță GA + CS%)
-- Offensive Consistency (varianță GF + FTS%)
-- BTTS Strength (BTTS% home + BTTS% away + ajustat de DEF stability)
-- Goal Probability (Poisson combinat din λ_home/λ_away)
-- Match Volatility (varianță combinată — input pentru risk)
-- Confidence Score (acoperire date × stabilitate × edge vs medie ligă)
-
-**Piețe analizate STRICT**:
-
-- 1X2 (Home / Draw / Away) — Poisson 0–6 grid + ajustare home advantage și form
-- BTTS (Yes / No) — derivat din λ_home, λ_away (1 − e^-λh)(1 − e^-λa)
-- Goals (Over 2.5 / Under 2.5) — Poisson cumulativ
-
-NU includem: AH, corners, cards, props.
-
-### 6. Final Pick Engine
-
-Per meci alegem CEA MAI PUTERNICĂ piață:
-
-- compute prob model vs prob implied (din odds dacă există, altfel doar pe model)
-- clasificăm:
-  - `STRONG PICK` — confidence ≥ 75 & edge ≥ 8%
-  - `MEDIUM PICK` — confidence ≥ 60 & edge ≥ 4%
-  - `RISKY PICK` — confidence ≥ 50
-  - `PASS` — altfel
-- afișăm UN SINGUR pick principal + 2 alternative slabe ascunse într-un accordion
-
-Nu forțăm predicții — `PASS` e răspuns valid.
-
-### 7. UI — Cento Power Terminal
-
-`src/pages/CentoPower.tsx` (rewrite) cu shell premium dark + 4 taburi:
+Funcție `detectPlaystyles(team)` → returnează tag primary + tag-uri secundare:
 
 ```text
-┌─ CENTO POWER ─────────────────────────────────┐
-│ [Imports] [Database] [Fixtures] [Analysis]    │
-└────────────────────────────────────────────────┘
+PRIMARY: possession / pressing / counter / low-block / high-press / bus-parking
+SECONDARY (multi-tag): direct, transition-heavy, wide, def-transition-weak,
+  high-xg-low-conv, low-xg-high-eff, set-piece, card-aggressive, corner-heavy,
+  second-half, fast-starter, late-goal
 ```
 
-- **Imports** — `ImportDropzone` + listă batch-uri recente din `cp_imports`.
-- **Database** — listă carduri ligi salvate (țară · sezon · teams · matches · coverage badge). Click → drill into ligă → tab fixtures + teams.
-- **Fixtures** — listă cronologică meciuri viitoare (`match_date >= today`), grupate pe zi, sortate. Auto-refresh la mount + revalidate React Query la 5min. Click meci → panou analiză.
-- **Analysis** — panoul detaliat cu: header echipe, ratinguri vizuale (radial bars), comparație home/away, recent form chips, ofensiv/defensiv profile, expected goals, ritm, BTTS strength, **Final Pick card mare** (Strong/Medium/Risky/PASS) + stake suggestion din bankroll, alternative collapsed.
+Reguli pe baza pragurilor din brief (possession %, dangerous attacks, shots, conversion xG/goals etc.).
+
+### 5. Smart Analysis & Value Engine (`src/lib/cento/valueEngine.ts`)
+
+Pentru fiecare match generat (din Match CSV sau perechi de echipe în aceeași ligă):
+
+- weighted recent form (ultimele 5, decay exp), home/away weighting
+- xG differential, shot quality (SOT/Shots), pace projection
+- variance, confidence score, risk score
+- style matchup detection (mismatch flags)
+- markets: 1X2, O/U 2.5, BTTS, Corners, Cards, HT, Team Totals
+- pentru fiecare market: implied prob, break-even %, model WR, EV, edge
+- afișează doar `WR > BE%` cu `edge ≥ threshold` (configurabil în Filters)
+- alege automat **Best Value Market** per meci
+
+Reutilizează `runAnalysis()` existent dar îl extinde — nu rescriem nucleul Poisson/MC/Kelly.
+
+### 6. UI nou — Cento Power Terminal
+
+Înlocuim conținutul `src/pages/CentoPower.tsx` cu shell de terminal + sub-rute interne (taburi):
+
+- **Imports** — drag&drop multi-file, listă batch-uri recente
+- **Database** — sidebar arborescent League → Season → Teams/Matches; căutare globală (echipe/ligi/markete)
+- **Value Engine** — Top Value Bets Today: cards cu edge bar, WR, EV, confidence bar, risk badge, playstyle clash icon, suggested stake (Kelly adj. la bankroll)
+- **Filters** sticky: WR min, EV min, odds min/max, risk, playstyle, league, market, edge min
+- **Bankroll** mini-widget (link la pagina existentă) cu exposure today, max daily risk, drawdown
 
 Componente noi:
-
-```text
+```
 src/components/cento/
   ImportDropzone.tsx
-  LeagueCard.tsx
-  FixturesList.tsx
-  MatchAnalysisPanel.tsx
-  RatingBar.tsx · StatCompare.tsx · FinalPickCard.tsx
-  CoverageBadge.tsx · ConfidenceMeter.tsx
+  DatabaseTree.tsx
+  GlobalSearch.tsx
+  ValueBetCard.tsx
+  EdgeBar.tsx · ConfidenceBar.tsx · RiskBadge.tsx · PlaystyleBadge.tsx
+  StickyFilters.tsx
+  TopValueGrid.tsx
 ```
 
-### 8. Data Quality System
+Design: dark terminal premium — folosesc tokens semantice (`--background`, `--card`, `--primary`, `--accent`, `--destructive`) + adaug în `index.css` câțiva tokens noi (`--cento-grid`, `--edge-positive`, `--edge-negative`, `--risk-low/med/high`). Fără tabele Excel-like, fără debug text. Heatmap simplu pentru xG via div-grid + opacitate.
 
-Per ligă calculăm coverage = % câmpuri non-null × prezența celor 3 fișiere:
+### 7. Sidebar & access
 
-- `Excellent` ≥ 85%
-- `Good` 60–85%
-- `Limited` < 60%
+Actualizez `AppSidebar.tsx` ordinea: Dashboard, Cento Power, Bankroll, Database (link intern Cento), Settings. Cento rămâne **premium-only** (`requirePremium` deja existent).
 
-Afișat ca badge colorat. Fără numere brute, fără debug.
+### 8. Performanță
 
-### 9. Bankroll Integration
+- Indexed queries pe `(league_id, season, match_date)`.
+- React Query cache + `staleTime` 5 min.
+- Parsing în Web Worker (`src/lib/cento/parser.worker.ts`) pentru fișiere mari.
+- Filtrare client-side cu `useMemo` peste rezultatul deja indexat.
 
-Citim bankroll-ul curent din `useBankroll` (sursă existentă). Stake suggestion mapat din confidence:
+### 9. Out of scope (cer confirmare după)
 
-- STRONG → 2U–3U (3U doar dacă confidence ≥ 88 & coverage Excellent)
-- MEDIUM → 1U
-- RISKY → 0.5U
-- PASS → —
-
-Sub Final Pick afișăm: „Suggested stake: 2U (≈ X LEI) of bankroll Y LEI”.
-
-### 10. Sidebar & Access
-
-`AppSidebar.tsx` — re-adăugăm itemul „Cento Power” (icon `Zap`, `premiumOnly: true`). Rută `/cento-power` în `App.tsx` cu `<ProtectedRoute requirePremium>`.
-
-### 11. Design
-
-- Dark UI cu tokens semantici existenți + adăugăm în `index.css`:
-  - `--cento-bg`, `--cento-card`, `--cento-glass`, `--pick-strong`, `--pick-medium`, `--pick-risky`, `--pick-pass`, `--rating-good`, `--rating-bad`.
-- Glassmorphism subtil (`backdrop-blur` pe cards).
-- Tipografie: display existent + mono pentru numere/ratinguri.
-- Zero text tehnic, zero loguri.
+- CLV tracking real-time (necesită feed cote live)
+- Auto-fetch CSV din site externe (CORS)
+- Streak analysis avansată cu istorice de pariuri marcate (depinde de Faza 2 — Profit Tracking)
 
 ---
 
-### Out of scope (cer confirmare după dacă vrei)
-
-- Live odds feed în timp real.
-- CLV tracking post-meci.
-- Auto-update rezultate meciuri (ar necesita un API extern).
-- Edge functions noi (totul rulează client-side + Supabase).
-
-### Fișiere
+### Tehnic — fișiere noi/modificate
 
 ```text
-src/pages/CentoPower.tsx                                          REWRITE
-src/lib/cento/{parser.ts, engine.ts, types.ts, normalize.ts,
-              quality.ts, bankrollSuggest.ts}                     NEW
-src/components/cento/*                                            NEW (vezi §7)
-src/components/AppSidebar.tsx                                     edit (re-add link)
-src/App.tsx                                                       edit (route)
-src/index.css                                                     extend tokens
-supabase/migrations/<ts>_cento_unique_indexes.sql                 doar dacă lipsesc
+supabase/migrations/<ts>_cento_power_v2.sql      (NEW)
+src/lib/cento/
+  importer.ts · playstyle.ts · valueEngine.ts · search.ts · types.ts   (NEW)
+src/components/cento/...                                                (NEW)
+src/pages/CentoPower.tsx                                                (REWRITE)
+src/lib/csvScanner.ts                                                   (extend aliases)
+src/components/AppSidebar.tsx                                           (reorder)
 ```
 
-# 1. IMPORTANT — NU FOLOSI TOATE MECIURILE DIN SEZON LA FORMĂ
-
-Acum ai:
-
-> Form Rating = ultimele 5–6 meciuri
-
-Foarte bine.
-
-Dar trebuie să specifici:
-
-- să NU folosească forma generală dacă există sample recent suficient
-- să dea prioritate ultimelor meciuri
-- decay exponențial mai agresiv pe ultimele 3
-
-Adaugă:
-
-```
-
-```
-
-```
-Recent matches must have exponentially higher importance than old matches.
-
-Example:
-- last 3 matches = highest weight
-- matches 4–6 = medium weight
-- older season data = low contextual weight
-
-The engine must avoid overrating teams because of early-season performance.
-```
-
----
-
-# 2. FOARTE IMPORTANT — SMALL SAMPLE PROTECTION
-
-Asta îți lipsește și e CRITIC.
-
-Dacă o echipă are:
-
--   
-doar 2 meciuri home  
-
--   
-sau 3 meciuri away  
-
-
-NU trebuie să tragă concluzii puternice.
-
-Adaugă:
-
-```
-
-```
-
-```
-If sample size is too small:
-- reduce confidence automatically
-- reduce home/away split importance
-- reduce trend confidence
-- avoid extreme probabilities
-
-The engine must protect against early-season variance.
-```
-
----
-
-# 3. MATCH IMPORTANCE CONTEXT
-
-Asta îți lipsește complet și contează enorm pentru analiză premium.
-
-Exemple:
-
--   
-final de sezon  
-
--   
-echipe fără miză  
-
--   
-titlu  
-
--   
-retrogradare  
-
--   
-diferență mare clasament  
-
-
-CSV-urile permit deducții indirecte.
-
-Adaugă:
-
-```
-
-```
-
-```
-The engine should derive contextual motivation signals from:
-- league position
-- points per game
-- season progression
-- goal difference
-- title/relegation proximity
-
-Without inventing narratives.
-
-These signals should slightly influence confidence and risk.
-```
-
----
-
-# 4. DRAW MODEL IMPROVEMENT (FOARTE IMPORTANT)
-
-Majoritatea modelelor Poisson sunt slabe pe egaluri.
-
-Adaugă:
-
-```
-
-```
-
-```
-Draw probability must be adjusted using:
-- low tempo matches
-- low attacking efficiency
-- strong defensive stability
-- low expected goals
-- historical draw tendency
-
-Do not rely purely on raw Poisson draw probability.
-```
-
----
-
-# 5. ANTI-OVERFITTING SYSTEM
-
-Foarte important.
-
-Acum modelul poate deveni prea agresiv.
-
-Adaugă:
-
-```
-
-```
-
-```
-The engine must avoid overfitting on:
-- single high scoring matches
-- outlier results
-- red-card influenced games
-- extreme variance
-
-Use smoothing and normalization across league averages.
-```
-
----
-
-# 6. LEAGUE TEMPO NORMALIZATION
-
-Asta e IMPORTANTĂ rău.
-
-Over 2.5 în Olanda ≠ Over 2.5 în Italia.
-
-Tu deja ai league stats.
-
-Adaugă:
-
-```
-
-```
-
-```
-All attacking and goal metrics must be normalized relative to league averages.
-
-Example:
-- a 65% over 2.5 team in a low-scoring league is stronger than a 65% over team in a high-scoring league.
-```
-
----
-
-# 7. ODDS MOVEMENT PLACEHOLDER (SMART)
-
-Chiar dacă nu ai live odds acum, pregătește arhitectura.
-
-Adaugă:
-
-```
-
-```
-
-```
-Prepare engine architecture for future odds movement integration.
-Store opening and latest odds if available later.
-```
-
----
-
-# 8. CONFIDENCE ≠ PROBABILITY
-
-FOARTE IMPORTANT.
-
-Mulți confundă astea.
-
-Trebuie specificat clar.
-
-Adaugă:
-
-```
-
-```
-
-```
-Confidence Score is NOT the same as win probability.
-
-Confidence should reflect:
-- data quality
-- model agreement
-- variance stability
-- consistency
-- sample reliability
-
-A high probability pick may still have low confidence.
-```
-
----
-
-# 9. SMART PASS SYSTEM
-
-Asta e vital pentru aplicație premium.
-
-Adaugă:
-
-```
-
-```
-
-```
-PASS must be treated as a high-quality professional output.
-
-The engine should prefer PASS when:
-- variance is too high
-- confidence is unstable
-- data coverage is low
-- probabilities are too close
-- match volatility is extreme
-```
-
----
-
-# 10. FOARTE IMPORTANT — TEAM NAME NORMALIZATION
-
-O să te lovești GARANTAT de asta.
-
-Ex:
-
--   
-Man Utd  
-
--   
-Manchester United  
-
--   
-Manchester Utd  
-
-
-Adaugă:
-
-```
-
-```
-
-```
-Implement robust team name normalization and fuzzy matching.
-
-Examples:
-- Man United
-- Manchester United
-- Manchester Utd
-
-must resolve to the same internal team entity.
-```
-
----
-
-# 11. DATE VIITOARE — CRITIC
-
-Ai zis că:
-
-> vrei meciurile de azi → viitor
-
-Trebuie specificat clar:
-
-```
-
-```
-
-```
-Fixtures page must ONLY show:
-- today matches
-- future scheduled matches
-
-Past matches are used for analysis only.
-```
-
----
-
-# 12. PERFORMANCE OPTIMIZATION
-
-380 meciuri × multe ligi = lag.
-
-Adaugă:
-
-```
-
-```
-
-```
-Use memoization and cached derived metrics.
-
-Do not recompute all ratings on every render.
-```
-
----
-
-# 13. CEL MAI IMPORTANT LUCRU — EXPLAINABLE ANALYSIS
-
-Asta transformă aplicația din „tool” în „premium terminal”.
-
-Adaugă:
-
-```
-
-```
-
-```
-Every final pick must include explainable reasoning.
-
-The engine should describe:
-- WHY the pick was selected
-- which metrics contributed most
-- what increased confidence
-- what reduced confidence
-
-Avoid generic AI text.
-```
+Fără edge functions noi. Totul client-side + Supabase pentru persistență.
