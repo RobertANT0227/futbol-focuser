@@ -19,18 +19,23 @@ const CONF_TIER_STYLE: Record<ConfidenceLevel, string> = {
   VERY_HIGH: 'bg-primary/25 border-primary/60 text-primary',
 };
 
-/** Map PowerAnalysis -> the same deriveConfidence() used on dashboard. */
+/** Tipster-plan tier: pure pe probabilitate + confidence + calitate date (fără cote). */
 function powerToConfidence(a: PowerAnalysis): ConfidenceLevel {
   const winRate = a.topMarket.prob * 100;
-  const modelConfidence: 'high' | 'medium' | 'low' =
-    a.confidence >= 70 ? 'high' : a.confidence >= 50 ? 'medium' : 'low';
+  const conf = a.confidence;
   const stability = Math.max(0, Math.min(1, a.quality.coverage * (1 - (a.quality.smallSamplePenalty ?? 0))));
-  const odds = a.topMarket.odds;
-  const value = odds ? (a.topMarket.prob * odds - 1) * 100 : 0;
-  const risk: 'low' | 'medium' | 'high' =
-    a.grade === 'STRONG' ? 'low' : a.grade === 'MEDIUM' ? 'medium' : 'high';
   const fragile = a.quality.band === 'Limited';
-  return deriveConfidence({ modelConfidence, winRate, value, stability, risk, fragile });
+  const cap = (lvl: ConfidenceLevel): ConfidenceLevel => {
+    if (!fragile) return lvl;
+    if (lvl === 'VERY_HIGH' || lvl === 'HIGH' || lvl === 'MEDIUM') return 'LOW';
+    return lvl;
+  };
+  if (a.grade === 'PASS' || winRate < 42) return cap('VERY_LOW');
+  if (conf >= 80 && winRate >= 70 && stability >= 0.7) return cap('VERY_HIGH');
+  if (conf >= 70 && winRate >= 60 && stability >= 0.55) return cap('HIGH');
+  if (conf >= 60 && winRate >= 50) return cap('MEDIUM');
+  if (conf >= 50 && winRate >= 45) return cap('LOW');
+  return cap('VERY_LOW');
 }
 
 function fmtDate(d: string | null) {
