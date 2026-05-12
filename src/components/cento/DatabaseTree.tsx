@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 export interface DbLeague {
   id: string; name: string; season: string; country?: string | null; teams: number; matches: number;
   has_league_stats?: boolean; has_matches?: boolean; has_teams?: boolean;
-  matches_count?: number; teams_count?: number; coverage?: Record<string, unknown> | null;
+  matches_count?: number; teams_count?: number; coverage?: unknown;
 }
 
 interface Props {
@@ -58,7 +58,8 @@ export function DatabaseTree({ leagues, selected, onSelect, onDelete }: Props) {
           {openLeagues[name] && (
             <div className="ml-5 border-l border-border/40 pl-2 space-y-1 py-1">
               {list.map((l) => {
-                const coverage = Number(l.coverage?.overall || 0);
+                const coverageObj = typeof l.coverage === 'object' && l.coverage !== null ? l.coverage as Record<string, unknown> : {};
+                const coverage = Number(coverageObj.overall || 0);
                 return (
                 <div key={l.id} className="flex items-center gap-1 group">
                   <button
