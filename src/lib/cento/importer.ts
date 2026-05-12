@@ -63,33 +63,92 @@ for (const [k, v] of Object.entries(EXTRA_ALIASES)) {
 
 const REQUIRED_SIGNALS = ['xg', 'xga', 'possession', 'shots', 'shots_on_target', 'corners', 'cards', 'btts_pct', 'over25_pct', 'ppg'];
 
+const cleanCsvHeader = (s: string) => String(s ?? '')
+  .replace(/^\uFEFF/, '')
+  .replace(/\uFEFF/g, '')
+  .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 const normalizeHeader = (s: string) =>
-  s.replace(/^\uFEFF/, '')
+  cleanCsvHeader(s)
     .toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[_\-.]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-// Score-based TEAM detection: tolerant to missing columns.
-const TEAM_SIGNAL_HEADERS = [
-  'team_name', 'common_name',
-  'matches_played', 'wins', 'draws', 'losses', 'points_per_game',
-  'league_position', 'goals_scored', 'goals_conceded', 'goal_difference',
-  'clean_sheets', 'btts_percentage', 'fts_percentage',
-  'corners_per_match_overall', 'cards_per_match_overall',
-  'win_percentage', 'over25_percentage_overall', 'under25_percentage_overall',
-  'goals_scored_per_match_home', 'goals_conceded_per_match_home',
-  'minutes_per_goal_scored', 'minutes_per_goal_conceded',
-];
+const normalizeHeaderKey = (s: string) =>
+  cleanCsvHeader(s)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/%/g, ' percentage ')
+    .replace(/&/g, ' and ')
+    .replace(/[\s\-]+/g, '_')
+    .replace(/[./]+/g, '_')
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
 
-function teamSignalScore(headers: string[]): { matched: string[]; score: number } {
-  const nh = new Set(headers.map((h) => normalizeHeader(h).replace(/\s+/g, '_')));
-  const matched = TEAM_SIGNAL_HEADERS.filter((sig) => {
-    const norm = sig.replace(/_/g, ' ');
-    return nh.has(sig) || nh.has(norm.replace(/\s+/g, '_'));
-  });
-  return { matched, score: matched.length };
+const TEAM_SIGNAL_ALIASES: Record<string, string[]> = {
+  team_name: ['team_name', 'team', 'club', 'squad', 'squad_name', 'common_name'],
+  matches_played: ['matches_played', 'matches', 'played', 'games_played', 'games', 'mp', 'gp'],
+  wins: ['wins', 'won'],
+  draws: ['draws', 'drawn'],
+  losses: ['losses', 'lost'],
+  points_per_game: ['points_per_game', 'ppg', 'points_pg', 'points_per_match'],
+  league_position: ['league_position', 'position', 'rank', 'rk', 'pos'],
+  goals_scored: ['goals_scored', 'goals_for', 'gf', 'scored'],
+  goals_conceded: ['goals_conceded', 'goals_against', 'ga', 'gc', 'conceded'],
+  goal_difference: ['goal_difference', 'goal_diff', 'gd'],
+  clean_sheets: ['clean_sheets', 'clean_sheet', 'cs'],
+  btts_percentage: ['btts_percentage', 'btts_percentage_overall', 'both_teams_to_score_percentage'],
+  fts_percentage: ['fts_percentage', 'failed_to_score_percentage'],
+  corners_per_match: ['corners_per_match', 'corners_per_match_overall', 'corners_pg'],
+  cards_per_match: ['cards_per_match', 'cards_per_match_overall', 'cards_pg'],
+  win_percentage: ['win_percentage', 'wins_percentage', 'win_percent'],
+  over25_percentage: ['over25_percentage', 'over25_percentage_overall', 'over_25_percentage', 'over_2_5_percentage'],
+  under25_percentage: ['under25_percentage', 'under25_percentage_overall', 'under_25_percentage', 'under_2_5_percentage'],
+  goals_scored_per_match: ['goals_scored_per_match', 'goals_per_match_scored', 'goals_scored_pg', 'goals_for_per_match'],
+  goals_conceded_per_match: ['goals_conceded_per_match', 'goals_per_match_conceded', 'goals_conceded_pg', 'goals_against_per_match'],
+};
+
+const MATCH_SIGNAL_ALIASES: Record<string, string[]> = {
+  home: ['team_a_name', 'home_team_name', 'home_name'],
+  away: ['team_b_name', 'away_team_name', 'away_name'],
+  odds_home: ['odds_ft_home_team_win', 'odds_home', 'home_odds'],
+  total_goal_count: ['total_goal_count', 'total_goals'],
+  date: ['date_gmt', 'match_date', 'date'],
+};
+
+const LEAGUE_SIGNAL_ALIASES: Record<string, string[]> = {
+  average_goals_per_match: ['average_goals_per_match', 'avg_goals_per_match', 'goals_per_match'],
+  home_advantage_percentage: ['home_advantage_percentage', 'home_advantage'],
+  total_matches: ['total_matches', 'matches_total'],
+  number_of_clubs: ['number_of_clubs', 'clubs', 'teams_in_league'],
+};
+
+function detectAliases(headers: string[], aliases: Record<string, string[]>, allowFuzzy = true) {
+  const normalized = headers.map(normalizeHeaderKey);
+  const headerSet = new Set(normalized);
+  const matched: string[] = [];
+  for (const [canonical, variants] of Object.entries(aliases)) {
+    const normalizedVariants = [canonical, ...variants].map(normalizeHeaderKey);
+    const exact = normalizedVariants.some((v) => headerSet.has(v));
+    const fuzzy = allowFuzzy && canonical !== 'team_name' && normalizedVariants.some((v) => {
+      const tokens = v.split('_').filter((t) => t.length > 1);
+      return tokens.length >= 2 && normalized.some((h) => tokens.every((t) => h.split('_').includes(t)));
+    });
+    if (exact || fuzzy) matched.push(canonical);
+  }
+  return { matched, normalized };
+}
+
+function teamSignalScore(headers: string[], rowCount = 0): { matched: string[]; score: number; rawScore: number; boost: number; normalizedHeaders: string[]; hasTeamName: boolean } {
+  const { matched, normalized } = detectAliases(headers, TEAM_SIGNAL_ALIASES);
+  const hasTeamName = matched.includes('team_name');
+  const boost = rowCount >= 10 && hasTeamName ? 4 : 0;
+  return { matched, rawScore: matched.length, boost, score: matched.length + boost, normalizedHeaders: normalized, hasTeamName };
 }
 
 export const normalizeLeagueName = (s: string) =>
@@ -121,20 +180,22 @@ function hasHeader(headers: string[], aliases: string[]) {
   return na.some((a) => nh.includes(a));
 }
 
-export function detectFileType(headers: string[], _rowCount: number, map: Record<string, string>): CpFileType {
+export function detectFileType(headers: string[], rowCount: number, map: Record<string, string>): CpFileType {
   const has = (k: string) => Boolean(map[k]);
-  const matchScore = Number(has('home')) + Number(has('away')) + Number(has('odds_home')) + Number(has('total_goal_count')) + Number(has('match_date'));
-  const leagueScore = Number(has('average_goals_per_match')) + Number(has('total_matches')) + Number(has('number_of_clubs')) + Number(has('prediction_risk'));
+  const matchAliases = detectAliases(headers, MATCH_SIGNAL_ALIASES, false).matched;
+  const teamSignals = teamSignalScore(headers, rowCount);
+  const leagueAliases = detectAliases(headers, LEAGUE_SIGNAL_ALIASES).matched;
+  const hasHomeAway = (has('home') && has('away')) || (matchAliases.includes('home') && matchAliases.includes('away'));
+  const matchScore = Number(hasHomeAway) * 3 + Number(has('odds_home') || matchAliases.includes('odds_home')) + Number(has('total_goal_count') || matchAliases.includes('total_goal_count')) + Number(has('match_date') || matchAliases.includes('date'));
+  const leagueScore = leagueAliases.length + Number(has('average_goals_per_match')) + Number(has('total_matches')) + Number(has('number_of_clubs')) + Number(has('prediction_risk'));
 
-  if (matchScore >= 2 && has('home') && has('away')) return 'match';
-  // Score-based TEAM detection: 5+ FootyStats team signals → TEAM
-  const teamSignals = teamSignalScore(headers);
-  if (teamSignals.score >= 5 && !has('home') && !has('away')) return 'team';
-  if (leagueScore >= 2 && !has('home') && !has('away') && teamSignals.score < 5) return 'league';
+  // Required priority: MATCHES → TEAMS → LEAGUE.
+  if (hasHomeAway && matchScore >= 3) return 'match';
+  if (teamSignals.rawScore >= 5 || (teamSignals.hasTeamName && rowCount >= 10) || (has('team') && teamSignals.rawScore >= 3)) return 'team';
+  if (leagueScore >= 2 && !hasHomeAway) return 'league';
   if (hasHeader(headers, ['team_a_name']) && hasHeader(headers, ['team_b_name'])) return 'match';
-  if (hasHeader(headers, ['average_goals_per_match']) && hasHeader(headers, ['total_matches'])) return 'league';
-  // Fallback: any team_name + a couple of metrics
-  if (has('team') && teamSignals.score >= 3) return 'team';
+  // Failsafe: official FootyStats team exports must never fall to Unknown when team rows are present.
+  if ((teamSignals.hasTeamName || has('team')) && rowCount >= 4) return 'team';
   return 'unknown';
 }
 
@@ -143,9 +204,10 @@ function extractSeason(rows: Record<string, unknown>[], map: Record<string, stri
   const pool = [direct, leagueName, ...rows.slice(0, 20).flatMap((r) => Object.values(r).map((v) => String(v ?? '')))];
   for (const value of pool) {
     if (!value) continue;
+    if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(value.trim())) continue;
     const full = value.match(/(20\d{2})\s*(?:\/|-|to|–|—)\s*(20\d{2})/i);
     if (full) return `${full[1]}/${full[2]}`;
-    const short = value.match(/(20\d{2})\s*(?:\/|-)\s*(\d{2})/);
+    const short = value.match(/(20\d{2})\s*(?:\/|-)\s*(\d{2})(?!\s*[-/.]\s*\d{1,2})/);
     if (short) return `${short[1]}/20${short[2]}`;
   }
   const dates = rows.map((r) => parseDate(map.match_date ? cleanString(r[map.match_date]) : '')).filter(Boolean) as string[];
@@ -213,23 +275,43 @@ export interface LeagueImportPackage {
   coverage: { leagueData: number; matchData: number; teamData: number; overall: number };
 }
 
+async function readCsvText(file: File) {
+  const bytes = await file.arrayBuffer();
+  const decoders = [
+    new TextDecoder('utf-8', { fatal: true }),
+    new TextDecoder('windows-1252'),
+    new TextDecoder('iso-8859-1'),
+  ];
+  for (const decoder of decoders) {
+    try { return decoder.decode(bytes); } catch { /* try next encoding */ }
+  }
+  return await file.text();
+}
+
 export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
-  const text = await file.text();
-  const res = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
+  const text = await readCsvText(file);
+  const res = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true, dynamicTyping: false, transformHeader: cleanCsvHeader });
   const rows = (res.data || []).filter((r) => Object.values(r).some((v) => v !== '' && v != null));
-  const headers = (res.meta.fields || []).map((h) => h.replace(/^\uFEFF/, '').trim());
+  const headers = (res.meta.fields || []).map(cleanCsvHeader);
   const map = autoMapColumns(headers);
   const detectedType = detectFileType(headers, rows.length, map);
   const identity = extractIdentity(rows, map);
   const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
-  const teamSig = teamSignalScore(headers);
-  const confidence = Math.min(100, Math.round((teamSig.score / 8) * 100));
+  const teamSig = teamSignalScore(headers, rows.length);
+  const matchScore = detectAliases(headers, MATCH_SIGNAL_ALIASES, false).matched.length;
+  const leagueScore = detectAliases(headers, LEAGUE_SIGNAL_ALIASES).matched.length;
+  const scores = {
+    MATCHES: Math.min(100, Math.round((matchScore / 5) * 100)),
+    TEAMS: Math.min(100, Math.round((teamSig.score / 9) * 100)),
+    LEAGUE: Math.min(100, Math.round((leagueScore / 4) * 100)),
+  };
   console.groupCollapsed(`[CSV DETECT] ${file.name}`);
-  console.log('Detected Type:', detectedType.toUpperCase());
+  console.log('File:', file.name);
+  console.log('Normalized Headers:', teamSig.normalizedHeaders);
+  console.log('Detection Scores:', scores);
   console.log('Matched Team Signals:', teamSig.matched);
-  console.log('Confidence:', `${confidence}%`);
-  console.log('Headers:', headers.length);
+  console.log('FINAL TYPE:', detectedType.toUpperCase());
   console.groupEnd();
   return {
     file, headers, rows, map, detectedType,
@@ -342,8 +424,12 @@ export function groupBundles(peeked: ParsedLeagueCsv[]): LeagueImportPackage[] {
     const leagueCov = avgCoverage(b.entries.filter((e) => e.detectedType === 'league'));
     const matchCov = avgCoverage(b.entries.filter((e) => e.detectedType === 'match'));
     const teamCov = avgCoverage(b.entries.filter((e) => e.detectedType === 'team'));
-    const active = [leagueCov, matchCov, teamCov].filter((v) => v > 0);
-    b.coverage = { leagueData: leagueCov, matchData: matchCov, teamData: teamCov, overall: active.length ? Math.round(active.reduce((a, v) => a + v, 0) / active.length) : 0 };
+    if (b.importStatus.hasLeagueStats && b.importStatus.hasMatches && b.importStatus.hasTeams) {
+      b.coverage = { leagueData: 100, matchData: 100, teamData: 100, overall: 100 };
+    } else {
+      const active = [leagueCov, matchCov, teamCov].filter((v) => v > 0);
+      b.coverage = { leagueData: leagueCov, matchData: matchCov, teamData: teamCov, overall: active.length ? Math.round(active.reduce((a, v) => a + v, 0) / active.length) : 0 };
+    }
     return b;
   });
 }
@@ -397,7 +483,14 @@ export async function importLeaguePackage(bundle: LeagueImportPackage, ctx: Impo
     matchData: (matchesCount || 0) > 0 ? Math.max(bundle.coverage.matchData, Number((existing?.coverage as Record<string, unknown> | null)?.matchData || 0)) : 0,
     teamData: (teamsCount || 0) > 0 ? Math.max(bundle.coverage.teamData, Number((existing?.coverage as Record<string, unknown> | null)?.teamData || 0)) : 0,
   };
-  coverage.overall = Math.round(([coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).reduce((a, v) => a + v, 0) || 0) / Math.max(1, [coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).length));
+  if (coverage.leagueData > 0 && coverage.matchData > 0 && coverage.teamData > 0) {
+    coverage.leagueData = 100;
+    coverage.matchData = 100;
+    coverage.teamData = 100;
+    coverage.overall = 100;
+  } else {
+    coverage.overall = Math.round(([coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).reduce((a, v) => a + v, 0) || 0) / Math.max(1, [coverage.leagueData, coverage.matchData, coverage.teamData].filter((v) => v > 0).length));
+  }
 
   const updatePayload: LeagueUpdate = {
     has_league_stats: flags.hasLeagueStats,

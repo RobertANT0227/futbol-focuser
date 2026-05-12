@@ -11,11 +11,11 @@ import { useAuth } from '@/contexts/AuthContext';
 interface Props { onDone: (results: CpImportResult[]) => void }
 
 const TYPE_LABEL: Record<string, string> = {
-  league: 'League Table',
-  match: 'Matches',
-  team: 'Team Stats',
+  league: 'League Stats',
+  match: 'Match Database',
+  team: 'Team Database',
   h2h: 'H2H',
-  unknown: 'Unknown',
+  unknown: 'Needs Review',
 };
 
 export function ImportDropzone({ onDone }: Props) {
@@ -201,7 +201,7 @@ function Pill({ ok, label }: { ok: boolean; label: string }) {
            : 'bg-muted/30 text-muted-foreground border-border/40 opacity-60',
       )}
     >
-      {ok ? <ShieldCheck className="h-3 w-3 mr-1" /> : '○'} {label}
+      {ok ? <ShieldCheck className="h-3 w-3 mr-1" /> : '○'} {label} {ok ? 'Loaded' : 'Missing'}
     </Badge>
   );
 }
