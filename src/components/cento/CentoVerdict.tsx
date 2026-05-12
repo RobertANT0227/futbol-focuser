@@ -30,17 +30,11 @@ function AdvancedPill({ label, value, accent }: { label: string; value: string; 
   );
 }
 
-function AdvancedCsvStats({ team, label, isHome }: { team: CpTeam; label: string; isHome: boolean }) {
+function AdvancedCsvStats({ team, label }: { team: CpTeam; label: string; isHome: boolean }) {
   const s = team.stats;
-  const ppg = num(s.points_per_game) ?? num(s.ppg);
-  const winPct = num(s.win_percentage);
-  const da = num(s.dangerous_attacks);
-  const cs = num(s.clean_sheets_percentage) ?? num(s.clean_sheets);
-  const sot = num(s.shots_on_target) ?? num(s.shots_on_target_per_match);
+  const shots = num(s.shots_per_match) ?? num(s.shots);
+  const sot = num(s.shots_on_target_per_match) ?? num(s.shots_on_target);
   const corners = num(s.corners_per_match) ?? num(s.corners);
-  const cards = num(s.cards_per_match) ?? num(s.cards);
-  const xg = num(s.xg) ?? num(isHome ? s.xg_for_avg_home : s.xg_for_avg_away);
-  const pos = num(s.league_position);
   return (
     <Card className="p-3 bg-card/60">
       <div className="flex items-center justify-between mb-2">
@@ -48,15 +42,9 @@ function AdvancedCsvStats({ team, label, isHome }: { team: CpTeam; label: string
         <div className="text-xs font-bold truncate">{team.name}</div>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {pos !== null && <AdvancedPill label="Poziție" value={`#${pos}`} />}
-        {ppg !== null && <AdvancedPill label="PPG" value={ppg.toFixed(2)} />}
-        {winPct !== null && <AdvancedPill label="Win %" value={`${winPct.toFixed(0)}%`} />}
-        {xg !== null && <AdvancedPill label="xG" value={xg.toFixed(2)} accent="text-primary" />}
-        {sot !== null && <AdvancedPill label="SoT" value={sot.toFixed(2)} />}
-        {da !== null && <AdvancedPill label="DA" value={da.toFixed(0)} />}
-        {corners !== null && <AdvancedPill label="Cornere" value={corners.toFixed(2)} />}
-        {cards !== null && <AdvancedPill label="Cartonașe" value={cards.toFixed(2)} />}
-        {cs !== null && <AdvancedPill label="Clean Sh." value={`${cs.toFixed(0)}${cs <= 1 ? '' : '%'}`} />}
+        <AdvancedPill label="Șuturi" value={shots !== null ? shots.toFixed(2) : '—'} />
+        <AdvancedPill label="Pe poartă" value={sot !== null ? sot.toFixed(2) : '—'} accent="text-primary" />
+        <AdvancedPill label="Cornere" value={corners !== null ? corners.toFixed(2) : '—'} />
       </div>
     </Card>
   );
