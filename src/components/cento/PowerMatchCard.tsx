@@ -6,32 +6,30 @@ import { RatingBar } from './RatingBar';
 import { QualityChip } from './QualityChip';
 import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { cn } from '@/lib/utils';
+import { deriveConfidence, CONFIDENCE_LABEL, type ConfidenceLevel } from '@/lib/bankroll';
 
 function fmtPct(n: number) { return `${(n * 100).toFixed(0)}%`; }
 
-type ConfTier = 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
-const CONF_TIER_LABEL: Record<ConfTier, string> = {
-  VERY_LOW: 'Very Low',
-  LOW: 'Low',
-  MEDIUM: 'Medium',
-  HIGH: 'High',
-  VERY_HIGH: 'Very High',
-};
-const CONF_TIER_STYLE: Record<ConfTier, string> = {
+const CONF_TIER_STYLE: Record<ConfidenceLevel, string> = {
   VERY_LOW: 'bg-destructive/20 border-destructive/50 text-destructive',
   LOW: 'bg-destructive/10 border-destructive/30 text-destructive',
   MEDIUM: 'bg-accent/20 border-accent/50 text-accent',
   HIGH: 'bg-primary/15 border-primary/40 text-primary',
   VERY_HIGH: 'bg-primary/25 border-primary/60 text-primary',
 };
-function computeConfTier(confidence: number, winRatePct: number): ConfTier {
-  // blended score: 60% model confidence, 40% win-rate of pick
-  const score = confidence * 0.6 + winRatePct * 0.4;
-  if (score >= 78) return 'VERY_HIGH';
-  if (score >= 65) return 'HIGH';
-  if (score >= 52) return 'MEDIUM';
-  if (score >= 40) return 'LOW';
-  return 'VERY_LOW';
+
+/** Map PowerAnalysis -> the same deriveConfidence() used on dashboard. */
+function powerToConfidence(a: PowerAnalysis): ConfidenceLevel {
+  const winRate = a.topMarket.prob * 100;
+  const modelConfidence: 'high' | 'medium' | 'low' =
+    a.confidence >= 70 ? 'high' : a.confidence >= 50 ? 'medium' : 'low';
+  const stability = Math.max(0, Math.min(1, a.quality.coverage * (1 - (a.quality.smallSamplePenalty ?? 0))));
+  const odds = a.topMarket.odds;
+  const value = odds ? (a.topMarket.prob * odds - 1) * 100 : 0;
+  const risk: 'low' | 'medium' | 'high' =
+    a.grade === 'STRONG' ? 'low' : a.grade === 'MEDIUM' ? 'medium' : 'high';
+  const fragile = a.quality.band === 'Limited';
+  return deriveConfidence({ modelConfidence, winRate, value, stability, risk, fragile });
 }
 
 function fmtDate(d: string | null) {
@@ -41,7 +39,7 @@ function fmtDate(d: string | null) {
 
 export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName?: string }) {
   const { match, ratingsHome: rh, ratingsAway: ra, probabilities, topMarket, confidence, grade, stakeUnits, quality, context, explanation, expectedGoalsHome, expectedGoalsAway } = a;
-  const confTier = computeConfTier(confidence, topMarket.prob * 100);
+  const confTier = powerToConfidence(a);
 
   const formStrip = (form: string[]) => (
     <div className="flex gap-1">
@@ -90,7 +88,7 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
               'inline-block mt-1 px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider',
               CONF_TIER_STYLE[confTier],
             )}>
-              {CONF_TIER_LABEL[confTier]}
+              {CONFIDENCE_LABEL[confTier]}
             </div>
             <div className="text-[10px] font-bold text-accent">{stakeUnits}U</div>
           </div>
