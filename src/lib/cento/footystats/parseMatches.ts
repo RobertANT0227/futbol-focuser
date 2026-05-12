@@ -33,10 +33,13 @@ export function parseMatches(rows: Record<string, unknown>[]): ParsedMatch[] {
     const ts = pickFirst(r, ['date_unix', 'date_gmt_unix', 'date_unix_kickoff'], safeNum);
     const dateStr = pickFirst(r, ['date_gmt', 'kickoff_date', 'date'], safeStr);
     const { iso, ms } = toIsoDate(ts, dateStr);
-    const homeGoals = pickFirst(r, ['home_team_goal_count', 'home_goals', 'home_goal_count'], safeNum);
-    const awayGoals = pickFirst(r, ['away_team_goal_count', 'away_goals', 'away_goal_count'], safeNum);
+    const rawHome = pickFirst(r, ['home_team_goal_count', 'home_goals', 'home_goal_count'], safeNum);
+    const rawAway = pickFirst(r, ['away_team_goal_count', 'away_goals', 'away_goal_count'], safeNum);
     const status = pickFirst(r, ['status'], safeStr);
-    const played = (homeGoals !== null && awayGoals !== null) || status === 'complete';
+    const isIncomplete = status === 'incomplete' || status === 'scheduled' || status === 'suspended' || status === 'canceled';
+    const played = !isIncomplete && status === 'complete';
+    const homeGoals = played ? rawHome : null;
+    const awayGoals = played ? rawAway : null;
     out.push({
       date: iso, timestamp: ms, home, away, homeGoals, awayGoals, played,
       oddsHome: pickFirst(r, ['odds_ft_home_team_win', 'odds_home_team_win', 'odds_ft_1'], safeNum),
