@@ -65,8 +65,8 @@ export default function CentoPower() {
       const missing = leagues.filter((l) => !allData[l.id]);
       if (!missing.length) return;
       const entries = await Promise.all(missing.map(async (l) => {
-        try { return [l.id, await getLeagueData(l.id)] as const; }
-        catch { return [l.id, { matches: [], teams: [] }] as const; }
+        try { return [l.id, await getLeagueData(l.id)] as [string, { matches: SyncedMatch[]; teams: SyncedTeam[] }]; }
+        catch { return [l.id, { matches: [] as SyncedMatch[], teams: [] as SyncedTeam[] }] as [string, { matches: SyncedMatch[]; teams: SyncedTeam[] }]; }
       }));
       if (cancelled) return;
       setAllData((prev) => {
