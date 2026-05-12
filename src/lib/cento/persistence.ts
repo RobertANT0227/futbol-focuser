@@ -93,21 +93,24 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
 
   let rowsImported = 0, duplicates = 0;
 
-  // 2) matches (insert new only — dedupe on home/away/date within 24h)
+  // 2) matches (insert new, update existing/undated rows on re-import)
   if (bundle.matches?.length) {
     const { data: existingMatches } = await supabase
       .from('cp_matches')
       .select('id, home, away, match_date')
       .eq('league_id', leagueId);
-    const seen = new Set((existingMatches ?? []).map((m) => `${normName(m.home)}|${normName(m.away)}|${m.match_date ?? ''}`));
-    const toInsert = bundle.matches
-      .filter((m) => {
-        const key = `${normName(m.home)}|${normName(m.away)}|${m.date ?? ''}`;
-        if (seen.has(key)) { duplicates++; return false; }
-        seen.add(key);
-        return true;
-      })
-      .map((m): any => ({
+    const exactByKey = new Map((existingMatches ?? []).map((m) => [`${normName(m.home)}|${normName(m.away)}|${m.match_date ?? ''}`, m.id]));
+    const undatedByTeams = new Map((existingMatches ?? [])
+      .filter((m) => !m.match_date)
+      .map((m) => [`${normName(m.home)}|${normName(m.away)}`, m.id]));
+    const seen = new Set<string>();
+    const toInsert: any[] = [];
+    const toUpdate: { id: string; payload: any }[] = [];
+    for (const m of bundle.matches) {
+      const key = `${normName(m.home)}|${normName(m.away)}|${m.date ?? ''}`;
+      if (seen.has(key)) { duplicates++; continue; }
+      seen.add(key);
+      const payload: any = {
         owner_id: userId,
         league_id: leagueId,
         home: m.home,
@@ -120,7 +123,20 @@ export async function persistBundle(bundle: ParsedLeagueBundle, userId: string):
           oddsOver25: m.oddsOver25, oddsUnder25: m.oddsUnder25,
         },
         stats: m,
-      }));
+      };
+      const existingId = exactByKey.get(key) ?? (m.date ? undatedByTeams.get(`${normName(m.home)}|${normName(m.away)}`) : undefined);
+      if (existingId) {
+        duplicates++;
+        toUpdate.push({ id: existingId, payload });
+      } else {
+        toInsert.push(payload);
+      }
+    }
+    for (const u of toUpdate) {
+      const { error } = await supabase.from('cp_matches').update(u.payload).eq('id', u.id);
+      if (error) throw error;
+      rowsImported += 1;
+    }
     if (toInsert.length) {
       const { error } = await supabase.from('cp_matches').insert(toInsert);
       if (error) throw error;
