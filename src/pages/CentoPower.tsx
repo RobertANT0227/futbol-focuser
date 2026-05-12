@@ -18,6 +18,7 @@ import { DatabaseTree, type DbLeague } from '@/components/cento/DatabaseTree';
 import { ValueBetCard } from '@/components/cento/ValueBetCard';
 import { StickyFilters, type CentoFilters } from '@/components/cento/StickyFilters';
 import { EdgeSettings } from '@/components/cento/EdgeSettings';
+import { MatchAnalysisPanel } from '@/components/cento/MatchAnalysisPanel';
 import { buildValueBets } from '@/lib/cento/valueEngine';
 import type { CpTeam, CpMatch, ValueBet, CpImportResult } from '@/lib/cento/types';
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
@@ -152,6 +153,19 @@ export default function CentoPower() {
     return matches.filter((m) => m.match_date === iso);
   }, [selectedDate, matches]);
 
+  // Resolve teams for matches on the selected date so we can render full analysis panels
+  const dateAnalyses = useMemo(() => {
+    if (!matchesOnDate || !teams.length) return [];
+    const teamMap = new Map<string, CpTeam>();
+    teams.forEach((t) => teamAliases(t).forEach((alias) => teamMap.set(`${t.league_id}::${alias}`, t)));
+    return matchesOnDate.map((m) => {
+      const home = findTeam(m.league_id, m.home, teamMap);
+      const away = findTeam(m.league_id, m.away, teamMap);
+      const lg = leagues.find((l) => l.id === m.league_id);
+      return { match: m, home, away, league: lg ? `${lg.name} · ${lg.season}` : '' };
+    });
+  }, [matchesOnDate, teams, leagues]);
+
   const leagueNames = useMemo(() => Array.from(new Set(leagues.map((l) => l.name))), [leagues]);
 
   const handleDeleteLeague = async (id: string) => {
@@ -267,14 +281,41 @@ export default function CentoPower() {
                 )}
               </div>
               <StickyFilters filters={filters} setFilters={setFilters} leagues={leagueNames} />
-              {visibleBets.length === 0 ? (
-                <EmptyHint hasDate={Boolean(selectedDate)} matchesOnDate={matchesOnDate?.length || 0} />
+              {selectedDate ? (
+                dateAnalyses.length === 0 ? (
+                  <EmptyHint hasDate matchesOnDate={0} />
+                ) : (
+                  <div className="space-y-6">
+                    {dateAnalyses.map(({ match, home, away, league }) => (
+                      home && away ? (
+                        <MatchAnalysisPanel
+                          key={match.id}
+                          match={match}
+                          home={home}
+                          away={away}
+                          league={league}
+                          bankroll={bankroll}
+                          kellyFraction={filters.stakeMode === 'flat' ? 0 : 1}
+                          onSave={saveBet}
+                        />
+                      ) : (
+                        <Card key={match.id} className="p-4 bg-card/40 text-sm text-muted-foreground">
+                          {match.home} vs {match.away} — echipele nu au fost găsite în baza de date pentru această ligă.
+                        </Card>
+                      )
+                    ))}
+                  </div>
+                )
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {visibleBets.map((b) => (
-                    <ValueBetCard key={`${b.matchId}-${b.market}`} bet={b} onSave={saveBet} />
-                  ))}
-                </div>
+                visibleBets.length === 0 ? (
+                  <EmptyHint hasDate={false} matchesOnDate={0} />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {visibleBets.map((b) => (
+                      <ValueBetCard key={`${b.matchId}-${b.market}`} bet={b} onSave={saveBet} />
+                    ))}
+                  </div>
+                )
               )}
             </TabsContent>
 
