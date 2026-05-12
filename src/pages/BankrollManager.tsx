@@ -66,6 +66,7 @@ import {
 } from '@/lib/bankroll';
 import { BetCard } from '@/components/BetCard';
 import type { BetRecommendation } from '@/lib/types';
+import { PickStakePlan } from '@/components/PickStakePlan';
 
 const BankrollManager = () => {
   const navigate = useNavigate();
@@ -205,6 +206,7 @@ const BankrollManager = () => {
       </div>
 
       <div className="max-w-7xl mx-auto p-4 space-y-6">
+        <PickStakePlan bankroll={state.currentBankroll} />
         {/* Header Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border-border">
