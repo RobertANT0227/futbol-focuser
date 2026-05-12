@@ -3,9 +3,18 @@ export type CpFileType = 'league' | 'team' | 'h2h' | 'match' | 'unknown';
 export interface CpLeague {
   id: string;
   name: string;
+  normalized_name?: string;
   country: string | null;
   season: string;
+  has_league_stats?: boolean;
+  has_matches?: boolean;
+  has_teams?: boolean;
+  league_stats?: Record<string, unknown>;
+  matches_count?: number;
+  teams_count?: number;
+  coverage?: Record<string, unknown>;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface CpTeamStats {
@@ -71,6 +80,23 @@ export interface CpImportResult {
   rowsImported: number;
   duplicates: number;
   fileName: string;
+  leagueId?: string;
+  normalizedLeagueName?: string;
+  importStatus?: {
+    hasLeagueStats: boolean;
+    hasMatches: boolean;
+    hasTeams: boolean;
+  };
+  stats?: {
+    matchesCount: number;
+    teamsCount: number;
+  };
+  coverage?: {
+    leagueData: number;
+    matchData: number;
+    teamData: number;
+    overall: number;
+  };
 }
 
 export type Risk = 'low' | 'medium' | 'high';
@@ -89,6 +115,7 @@ export interface ValueBet {
   ev: number;            // modelWR*odds - 1
   edge: number;          // (modelWR - impliedProb) * 100
   confidence: number;    // 0..100
+  sampleSize: number;
   risk: Risk;
   variance: number;      // 0..1
   styleClash: boolean;

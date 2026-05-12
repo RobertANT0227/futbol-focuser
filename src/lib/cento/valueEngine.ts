@@ -230,6 +230,7 @@ export function buildValueBets(
       ev,
       edge,
       confidence: conf,
+      sampleSize: Lh.signalsUsed + La.signalsUsed + report.used.size,
       risk: riskFromConfidence(conf, edge, reliability),
       variance: finalVariance,
       styleClash: clash,
