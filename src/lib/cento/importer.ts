@@ -43,6 +43,19 @@ const EXTRA_ALIASES: Record<string, string[]> = {
   odds_btts_no: ['odds_btts_no', 'btts no odds', 'btts no'],
   total_goal_count: ['total_goal_count', 'total goals', 'goals total'],
   attendance: ['attendance', 'spectators'],
+  // Team-specific FootyStats columns
+  wins: ['wins', 'wins_home', 'wins_away', 'win'],
+  draws: ['draws', 'draws_home', 'draws_away', 'draw'],
+  losses: ['losses', 'losses_home', 'losses_away', 'loss'],
+  goal_difference: ['goal_difference', 'goal diff', 'gd'],
+  win_percentage: ['win_percentage', 'win percentage', 'win%', 'wins percentage'],
+  fts_percentage: ['fts_percentage', 'fts percentage', 'failed to score percentage'],
+  corners_per_match: ['corners_per_match_overall', 'corners per match', 'corners_per_match'],
+  cards_per_match: ['cards_per_match_overall', 'cards per match', 'cards_per_match'],
+  over25_percentage: ['over25_percentage', 'over 2.5 percentage', 'over25_percentage_overall'],
+  under25_percentage: ['under25_percentage', 'under 2.5 percentage', 'under25_percentage_overall'],
+  btts_percentage: ['btts_percentage', 'btts percentage', 'btts_percentage_overall'],
+  matches_played: ['matches_played', 'matches played', 'games_played', 'mp', 'gp', 'matches'],
 };
 for (const [k, v] of Object.entries(EXTRA_ALIASES)) {
   COLUMN_ALIASES[k] = Array.from(new Set([...(COLUMN_ALIASES[k] || []), ...v]));
@@ -51,7 +64,33 @@ for (const [k, v] of Object.entries(EXTRA_ALIASES)) {
 const REQUIRED_SIGNALS = ['xg', 'xga', 'possession', 'shots', 'shots_on_target', 'corners', 'cards', 'btts_pct', 'over25_pct', 'ppg'];
 
 const normalizeHeader = (s: string) =>
-  s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_\-.]+/g, ' ').replace(/\s+/g, ' ').trim();
+  s.replace(/^\uFEFF/, '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_\-.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+// Score-based TEAM detection: tolerant to missing columns.
+const TEAM_SIGNAL_HEADERS = [
+  'team_name', 'common_name',
+  'matches_played', 'wins', 'draws', 'losses', 'points_per_game',
+  'league_position', 'goals_scored', 'goals_conceded', 'goal_difference',
+  'clean_sheets', 'btts_percentage', 'fts_percentage',
+  'corners_per_match_overall', 'cards_per_match_overall',
+  'win_percentage', 'over25_percentage_overall', 'under25_percentage_overall',
+  'goals_scored_per_match_home', 'goals_conceded_per_match_home',
+  'minutes_per_goal_scored', 'minutes_per_goal_conceded',
+];
+
+function teamSignalScore(headers: string[]): { matched: string[]; score: number } {
+  const nh = new Set(headers.map((h) => normalizeHeader(h).replace(/\s+/g, '_')));
+  const matched = TEAM_SIGNAL_HEADERS.filter((sig) => {
+    const norm = sig.replace(/_/g, ' ');
+    return nh.has(sig) || nh.has(norm.replace(/\s+/g, '_'));
+  });
+  return { matched, score: matched.length };
+}
 
 export const normalizeLeagueName = (s: string) =>
   normalizeHeader(s)
@@ -85,14 +124,17 @@ function hasHeader(headers: string[], aliases: string[]) {
 export function detectFileType(headers: string[], _rowCount: number, map: Record<string, string>): CpFileType {
   const has = (k: string) => Boolean(map[k]);
   const matchScore = Number(has('home')) + Number(has('away')) + Number(has('odds_home')) + Number(has('total_goal_count')) + Number(has('match_date'));
-  const teamScore = Number(has('team')) + Number(has('matches_played')) + Number(has('ppg')) + Number(has('goals_scored')) + Number(has('goals_conceded'));
   const leagueScore = Number(has('average_goals_per_match')) + Number(has('total_matches')) + Number(has('number_of_clubs')) + Number(has('prediction_risk'));
 
   if (matchScore >= 2 && has('home') && has('away')) return 'match';
-  if (leagueScore >= 2 && !has('home') && !has('away')) return 'league';
-  if (teamScore >= 3 && has('team')) return 'team';
+  // Score-based TEAM detection: 5+ FootyStats team signals → TEAM
+  const teamSignals = teamSignalScore(headers);
+  if (teamSignals.score >= 5 && !has('home') && !has('away')) return 'team';
+  if (leagueScore >= 2 && !has('home') && !has('away') && teamSignals.score < 5) return 'league';
   if (hasHeader(headers, ['team_a_name']) && hasHeader(headers, ['team_b_name'])) return 'match';
   if (hasHeader(headers, ['average_goals_per_match']) && hasHeader(headers, ['total_matches'])) return 'league';
+  // Fallback: any team_name + a couple of metrics
+  if (has('team') && teamSignals.score >= 3) return 'team';
   return 'unknown';
 }
 
