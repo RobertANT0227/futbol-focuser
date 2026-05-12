@@ -63,7 +63,7 @@ export default function CentoPower() {
   const [filters, setFilters] = useState<CentoFilters>(initialFilters);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('value');
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => new Date());
 
   const reload = useCallback(async () => {
     if (!user) return;
@@ -126,6 +126,26 @@ export default function CentoPower() {
     }).sort((a, b) => b.edge - a.edge);
   }, [allBets, filters, search, selectedLeague, leagues, selectedDate, matches]);
 
+  const dateBestBets = useMemo(() => {
+    if (!selectedDate) return filteredBets;
+    const iso = format(selectedDate, 'yyyy-MM-dd');
+    const selectedLeagueName = selectedLeague ? leagues.find((l) => l.id === selectedLeague)?.name : undefined;
+    return matches
+      .filter((m) => m.match_date === iso)
+      .flatMap((m) => {
+        const candidates = allBets.filter((b) => {
+          if (b.matchId !== m.id) return false;
+          if (selectedLeagueName && !b.league.includes(selectedLeagueName)) return false;
+          if (filters.market !== 'all' && b.category !== filters.market) return false;
+          if (filters.league !== 'all' && !b.league.startsWith(filters.league)) return false;
+          if (search && !`${b.home} ${b.away} ${b.league}`.toLowerCase().includes(search.toLowerCase())) return false;
+          if (b.odds < filters.oddsMin || b.odds > filters.oddsMax) return false;
+          return true;
+        }).sort((a, b) => b.edge - a.edge);
+        return candidates[0] ? [candidates[0]] : [];
+      });
+  }, [allBets, filteredBets, filters.league, filters.market, filters.oddsMax, filters.oddsMin, leagues, matches, search, selectedDate, selectedLeague]);
+
   const matchesOnDate = useMemo(() => {
     if (!selectedDate) return null;
     const iso = format(selectedDate, 'yyyy-MM-dd');
@@ -156,7 +176,8 @@ export default function CentoPower() {
   // KPIs
   const totalMatches = matches.length;
   const totalLeagues = leagues.length;
-  const topBets = filteredBets.slice(0, 12);
+  const visibleBets = selectedDate ? dateBestBets : filteredBets;
+  const topBets = visibleBets.slice(0, 12);
 
   return (
     <div className="min-h-screen bg-background">
@@ -246,11 +267,11 @@ export default function CentoPower() {
                 )}
               </div>
               <StickyFilters filters={filters} setFilters={setFilters} leagues={leagueNames} />
-              {filteredBets.length === 0 ? (
+              {visibleBets.length === 0 ? (
                 <EmptyHint hasDate={Boolean(selectedDate)} matchesOnDate={matchesOnDate?.length || 0} />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {filteredBets.map((b) => (
+                  {visibleBets.map((b) => (
                     <ValueBetCard key={`${b.matchId}-${b.market}`} bet={b} onSave={saveBet} />
                   ))}
                 </div>
