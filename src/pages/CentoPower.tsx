@@ -18,7 +18,7 @@ import type { CpTeam, CpMatch, ValueBet, CpImportResult } from '@/lib/cento/type
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
 
 const initialFilters: CentoFilters = {
-  edgeMin: 3, oddsMin: 1.4, oddsMax: 8, risk: 'all', market: 'all', league: 'all',
+  edgeMin: 3, confidenceMin: 45, sampleSizeMin: 4, oddsMin: 1.4, oddsMax: 8, risk: 'all', market: 'all', league: 'all', stakeMode: 'dynamic',
 };
 
 export default function CentoPower() {
@@ -34,7 +34,7 @@ export default function CentoPower() {
   const reload = useCallback(async () => {
     if (!user) return;
     const [{ data: lg }, { data: tm }, { data: mt }] = await Promise.all([
-      supabase.from('cp_leagues').select('id,name,season').order('name'),
+      supabase.from('cp_leagues').select('id,name,country,season,has_league_stats,has_matches,has_teams,matches_count,teams_count,coverage').order('name'),
       supabase.from('cp_teams').select('id,league_id,name,playstyle,tags,stats'),
       supabase.from('cp_matches').select('id,league_id,season,match_date,home,away,stats,odds').order('match_date', { ascending: false }),
     ]);
@@ -61,18 +61,24 @@ export default function CentoPower() {
       if (!home || !away) continue;
       const lg = leagues.find((l) => l.id === m.league_id);
       const bets = buildValueBets(m, home, away, {
-        bankroll, edgeMin: 0, kellyFraction: 0.5, maxStakePct: 0.05,
+        bankroll,
+        edgeMin: 0,
+        kellyFraction: filters.stakeMode === 'flat' ? 0 : filters.stakeMode === 'kelly' ? 0.5 : 0.35,
+        maxStakePct: filters.stakeMode === 'flat' ? 0.02 : filters.stakeMode === 'kelly' ? 0.05 : 0.035,
       });
       bets.forEach((b) => { b.league = lg ? `${lg.name} · ${lg.season}` : ''; out.push(b); });
     }
     return out;
-  }, [matches, teams, leagues, bankroll]);
+  }, [matches, teams, leagues, bankroll, filters.stakeMode]);
 
   const filteredBets = useMemo(() => {
     return allBets.filter((b) => {
       if (selectedLeague && !b.league.includes(leagues.find((l) => l.id === selectedLeague)?.name || '____')) return false;
       if (b.edge < filters.edgeMin) return false;
+      if (b.confidence < filters.confidenceMin) return false;
+      if (b.sampleSize < filters.sampleSizeMin) return false;
       if (b.odds < filters.oddsMin || b.odds > filters.oddsMax) return false;
+      if (b.dataReliability === 'low' && b.edge < Math.max(filters.edgeMin, 8)) return false;
       if (filters.risk !== 'all' && b.risk !== filters.risk) return false;
       if (filters.market !== 'all' && b.category !== filters.market) return false;
       if (filters.league !== 'all' && !b.league.startsWith(filters.league)) return false;
