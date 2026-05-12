@@ -136,6 +136,7 @@ function emptyTeam(name: string): TeamProfile {
     bttsPct: null, over25Pct: null, under25Pct: null,
     homePlayed: null, homeWins: null, homeDraws: null, homeLosses: null, homeGFAvg: null, homeGAAvg: null, homeBttsPct: null, homeOver25Pct: null,
     awayPlayed: null, awayWins: null, awayDraws: null, awayLosses: null, awayGFAvg: null, awayGAAvg: null, awayBttsPct: null, awayOver25Pct: null,
+    cornersForAvg: null, cornersAgainstAvg: null, cornersForHome: null, cornersAgainstHome: null, cornersForAway: null, cornersAgainstAway: null,
     form: [], shotsAvg: null, shotsOTAvg: null, shotsConcededAvg: null, attackingEff: null, defensiveEff: null, fts2score: null,
     scoringFirstHalfPct: null, scoringSecondHalfPct: null, concedingFirstHalfPct: null, concedingSecondHalfPct: null,
     xgFor: null, xgAgainst: null, xgForHome: null, xgForAway: null, xgAgainstHome: null, xgAgainstAway: null,
