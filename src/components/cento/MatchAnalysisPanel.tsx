@@ -104,9 +104,10 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
   }
 
   const bets = analysis.bets.map((b) => ({ ...b, league: b.league || league || '' }));
-  const valueBets = bets.filter((b) => b.edge > 0).sort((a, b) => b.ev - a.ev);
-  const otherBets = bets.filter((b) => b.edge <= 0);
-  const top = valueBets[0];
+  // Premium Tipster picks: high model win-rate (>=76%), regardless of value/edge
+  const premiumBets = bets.filter((b) => b.modelWR >= PREMIUM_WR).sort((a, b) => b.modelWR - a.modelWR);
+  const otherBets = bets.filter((b) => b.modelWR < PREMIUM_WR).sort((a, b) => b.modelWR - a.modelWR);
+  const top = premiumBets[0];
 
   // Motivation block built from extra CSV signals
   const motivation: string[] = [];
@@ -120,7 +121,6 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
   if (hPpg !== null && aPpg !== null) {
     motivation.push(`PPG: ${hPpg.toFixed(2)} vs ${aPpg.toFixed(2)} (gap ${(hPpg - aPpg).toFixed(2)}).`);
   }
-  if (analysis.clash) motivation.push(`Stiluri în conflict — ${analysis.psH} vs ${analysis.psA} crește variația.`);
   if (analysis.reliability !== 'high') {
     motivation.push(`Acoperire date: ${(analysis.completeness * 100).toFixed(0)}% (${analysis.reliability}). Lipsesc: ${analysis.missingStats.slice(0, 6).join(', ') || '—'}.`);
   }
@@ -133,7 +133,6 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
           <h3 className="font-bold text-lg">{match.home} <span className="text-muted-foreground font-normal">vs</span> {match.away}</h3>
         </div>
         <div className="flex items-center gap-2">
-          {analysis.clash && <Badge className="bg-accent/20 text-accent border-accent/40"><Swords className="h-3 w-3 mr-1" />Style Clash</Badge>}
           <Badge variant="outline" className="font-mono text-[10px]">Reliability: {analysis.reliability}</Badge>
         </div>
       </div>
@@ -165,8 +164,8 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
 
       {/* Team detail cards (advanced stats from CSV) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <TeamCard side="🏠 Acasă" name={home.name} style={analysis.psH} stats={home.stats} isHome />
-        <TeamCard side="✈️ Deplasare" name={away.name} style={analysis.psA} stats={away.stats} isHome={false} />
+        <TeamCard side="🏠 Acasă" name={home.name} stats={home.stats} isHome />
+        <TeamCard side="✈️ Deplasare" name={away.name} stats={away.stats} isHome={false} />
       </div>
 
       {/* Motivation/context */}
@@ -180,26 +179,26 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
       )}
 
       {/* Top Bets */}
-      {valueBets.length > 0 ? (
+      {premiumBets.length > 0 ? (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h4 className="font-bold text-sm">🔥 Top Bets <span className="text-[10px] font-normal text-muted-foreground">(sortat după EV)</span></h4>
-            <span className="text-[10px] font-mono text-muted-foreground">{valueBets.length} selecții</span>
+            <h4 className="font-bold text-sm">⭐ Pronosticuri Premium Tipster <span className="text-[10px] font-normal text-muted-foreground">(WR ≥ {Math.round(PREMIUM_WR * 100)}%)</span></h4>
+            <span className="text-[10px] font-mono text-muted-foreground">{premiumBets.length} selecții</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {valueBets.map((b, i) => <ValueBetCard key={`v-${i}`} bet={b} onSave={onSave} />)}
+            {premiumBets.map((b, i) => <ValueBetCard key={`v-${i}`} bet={b} onSave={onSave} hideStyles />)}
           </div>
           {top && (
             <div className="mt-3 rounded-lg border border-border/40 bg-secondary/30 p-3 text-xs">
-              <strong className="text-foreground">Top pick — {top.market}:</strong>{' '}
-              WR {(top.modelWR * 100).toFixed(1)}% la cota {top.odds.toFixed(2)} → edge {top.edge.toFixed(1)}%, EV {(top.ev * 100).toFixed(1)}%.
-              Stake sugerat {top.suggestedStakeLei} LEI ({(top.suggestedStakePct * 100).toFixed(1)}% bankroll).
+              <strong className="text-foreground">Best Bet — {top.market}:</strong>{' '}
+              Win Rate {(top.modelWR * 100).toFixed(1)}% la cota {top.odds.toFixed(2)}.
+              Stake (Full Kelly): {top.suggestedStakeLei} LEI ({(top.suggestedStakePct * 100).toFixed(1)}% bankroll).
             </div>
           )}
         </div>
       ) : (
         <Card className="p-4 text-center text-xs text-muted-foreground bg-card/40">
-          Niciun pariu cu edge pozitiv pe baza datelor curente. Vezi mai jos selecțiile analizate.
+          Niciun pronostic Premium Tipster (WR ≥ {Math.round(PREMIUM_WR * 100)}%) pe baza datelor curente. Vezi mai jos selecțiile analizate.
         </Card>
       )}
 
@@ -210,7 +209,7 @@ export function MatchAnalysisPanel({ match, home, away, league, bankroll, kellyF
             📋 Alte selecții analizate ({otherBets.length})
           </summary>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mt-3">
-            {otherBets.map((b, i) => <ValueBetCard key={`o-${i}`} bet={b} onSave={onSave} />)}
+            {otherBets.map((b, i) => <ValueBetCard key={`o-${i}`} bet={b} onSave={onSave} hideStyles />)}
           </div>
         </details>
       )}
