@@ -19,8 +19,12 @@ import { ValueBetCard } from '@/components/cento/ValueBetCard';
 import { StickyFilters, type CentoFilters } from '@/components/cento/StickyFilters';
 import { EdgeSettings } from '@/components/cento/EdgeSettings';
 import { CentoVerdict } from '@/components/cento/CentoVerdict';
+import { BetCard } from '@/components/BetCard';
+import { runAnalysis } from '@/lib/engine';
+import { cpToMatchData } from '@/lib/cento/dashboardAdapter';
 import { buildValueBets } from '@/lib/cento/valueEngine';
 import type { CpTeam, CpMatch, ValueBet, CpImportResult } from '@/lib/cento/types';
+import type { BetRecommendation } from '@/lib/types';
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
 
 const initialFilters: CentoFilters = {
@@ -193,6 +197,41 @@ export default function CentoPower() {
   const visibleBets = selectedDate ? dateBestBets : filteredBets;
   const topBets = visibleBets.slice(0, 12);
 
+  // Top Today (Tipster) — alege cel mai mare WR per meci, sortat descrescător
+  const tipsterTop = useMemo(() => {
+    if (!teams.length || !matches.length) return [] as { bet: BetRecommendation; matchLabel: string; league: string }[];
+    const teamMap = new Map<string, CpTeam>();
+    teams.forEach((t) => teamAliases(t).forEach((alias) => teamMap.set(`${t.league_id}::${alias}`, t)));
+    const iso = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null;
+    const selectedLeagueName = selectedLeague ? leagues.find((l) => l.id === selectedLeague)?.name : undefined;
+    const out: { bet: BetRecommendation; matchLabel: string; league: string }[] = [];
+    for (const m of matches) {
+      if (iso && m.match_date !== iso) continue;
+      if (selectedLeague && m.league_id !== selectedLeague) continue;
+      const home = findTeam(m.league_id, m.home, teamMap);
+      const away = findTeam(m.league_id, m.away, teamMap);
+      if (!home || !away) continue;
+      const lg = leagues.find((l) => l.id === m.league_id);
+      const leagueLabel = lg ? `${lg.name} · ${lg.season}` : '';
+      if (selectedLeagueName && !leagueLabel.includes(selectedLeagueName)) continue;
+      try {
+        const md = cpToMatchData(m, home, away, leagueLabel);
+        const res = runAnalysis(md, { bankroll, maxRisk: 'high', preferredBets: ['winner', 'goals', 'corners'] });
+        const best = [...res.recommendations]
+          .filter((r) => r.modelProbability >= 0.5)
+          .sort((a, b) => b.winRate - a.winRate || b.modelProbability - a.modelProbability)[0];
+        if (best) {
+          if (search) {
+            const hay = `${m.home} ${m.away} ${leagueLabel}`.toLowerCase();
+            if (!hay.includes(search.toLowerCase())) continue;
+          }
+          out.push({ bet: best, matchLabel: `${m.home} vs ${m.away}`, league: leagueLabel });
+        }
+      } catch { /* skip */ }
+    }
+    return out.sort((a, b) => b.bet.winRate - a.bet.winRate);
+  }, [matches, teams, leagues, selectedDate, selectedLeague, bankroll, search]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header strip */}
@@ -320,14 +359,30 @@ export default function CentoPower() {
             <TabsContent value="top" className="mt-4">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <div className="text-xs uppercase tracking-widest text-muted-foreground">Top Value Bets</div>
-                  <h2 className="font-bold text-2xl">Today's Best Edges</h2>
+                  <div className="text-xs uppercase tracking-widest text-muted-foreground">Top Tipster · sortat după Win Rate</div>
+                  <h2 className="font-bold text-2xl">
+                    {selectedDate ? `Pronosticuri ${format(selectedDate, 'd MMM yyyy', { locale: ro })}` : 'Top Today'}
+                  </h2>
                 </div>
-                <Badge variant="outline" className="border-primary/40 text-primary">Auto-Shortlist</Badge>
+                <Badge variant="outline" className="border-primary/40 text-primary">{tipsterTop.length} selecții</Badge>
               </div>
-              {topBets.length === 0 ? <EmptyHint /> : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {topBets.map((b) => <ValueBetCard key={`${b.matchId}-${b.market}`} bet={b} onSave={saveBet} />)}
+              {tipsterTop.length === 0 ? <EmptyHint hasDate={!!selectedDate} matchesOnDate={matchesOnDate?.length || 0} /> : (
+                <div className="space-y-3">
+                  {tipsterTop.slice(0, 25).map((item, i) => (
+                    <div key={`${item.matchLabel}-${i}`} className="flex items-center gap-3">
+                      <div className={cn(
+                        'shrink-0 w-10 h-10 rounded-lg flex items-center justify-center font-bold font-mono',
+                        i === 0 ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' :
+                        i < 3 ? 'bg-primary/15 text-primary border border-primary/30' :
+                        'bg-secondary/40 text-muted-foreground border border-border/40'
+                      )}>
+                        {i === 0 ? '⭐' : `#${i + 1}`}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <BetCard bet={item.bet} matchLabel={`${item.matchLabel} · ${item.league}`} rank={i + 1} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </TabsContent>
