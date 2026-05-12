@@ -18,7 +18,7 @@ import { DatabaseTree, type DbLeague } from '@/components/cento/DatabaseTree';
 import { ValueBetCard } from '@/components/cento/ValueBetCard';
 import { StickyFilters, type CentoFilters } from '@/components/cento/StickyFilters';
 import { EdgeSettings } from '@/components/cento/EdgeSettings';
-import { MatchAnalysisPanel } from '@/components/cento/MatchAnalysisPanel';
+import { CentoVerdict } from '@/components/cento/CentoVerdict';
 import { buildValueBets } from '@/lib/cento/valueEngine';
 import type { CpTeam, CpMatch, ValueBet, CpImportResult } from '@/lib/cento/types';
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
@@ -288,15 +288,13 @@ export default function CentoPower() {
                   <div className="space-y-6">
                     {dateAnalyses.map(({ match, home, away, league }) => (
                       home && away ? (
-                        <MatchAnalysisPanel
+                        <CentoVerdict
                           key={match.id}
                           match={match}
                           home={home}
                           away={away}
                           league={league}
                           bankroll={bankroll}
-                          kellyFraction={filters.stakeMode === 'flat' ? 0 : 1}
-                          onSave={saveBet}
                         />
                       ) : (
                         <Card key={match.id} className="p-4 bg-card/40 text-sm text-muted-foreground">
