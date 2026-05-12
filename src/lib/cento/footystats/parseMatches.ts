@@ -14,6 +14,16 @@ function toIsoDate(ts: number | null, dateStr: string | null): { iso: string | n
   return { iso: null, ms: null };
 }
 
+function buildRaw(r: Record<string, unknown>): Record<string, number | string | null> {
+  const out: Record<string, number | string | null> = {};
+  for (const [k, v] of Object.entries(r)) {
+    if (v === null || v === undefined || v === '') { out[k] = null; continue; }
+    const n = Number(String(v).replace('%', '').replace(/,/g, '.'));
+    out[k] = Number.isFinite(n) ? n : String(v);
+  }
+  return out;
+}
+
 export function parseMatches(rows: Record<string, unknown>[]): ParsedMatch[] {
   const out: ParsedMatch[] = [];
   for (const r of rows) {
@@ -52,6 +62,9 @@ export function parseMatches(rows: Record<string, unknown>[]): ParsedMatch[] {
       awayCorners: pickFirst(r, ['away_team_corner_count'], safeNum),
       homeCards: pickFirst(r, ['home_team_yellow_cards', 'home_team_cards'], safeNum),
       awayCards: pickFirst(r, ['away_team_yellow_cards', 'away_team_cards'], safeNum),
+      preXgHome: pickFirst(r, ['Home Team Pre-Match xG', 'home_team_pre_match_xg', 'team_a_xg_prematch', 'team_a_xg'], safeNum),
+      preXgAway: pickFirst(r, ['Away Team Pre-Match xG', 'away_team_pre_match_xg', 'team_b_xg_prematch', 'team_b_xg'], safeNum),
+      raw: buildRaw(r),
     });
   }
   return out;
