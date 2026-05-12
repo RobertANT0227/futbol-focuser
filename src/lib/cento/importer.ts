@@ -151,6 +151,15 @@ const LEAGUE_EXCLUSIVE_HEADERS = new Set([
   'total_corners_for_season', 'total_cards_for_season', 'xg_avg_per_match',
 ]);
 
+function detectFilenameHint(fileName?: string): CpFileType | undefined {
+  if (!fileName) return undefined;
+  const parts = new Set(normalizeHeaderKey(fileName.replace(/\.csv$/i, '')).split('_').filter(Boolean));
+  if (parts.has('matches') || parts.has('match') || parts.has('fixtures') || parts.has('fixture')) return 'match';
+  if (parts.has('teams') || parts.has('team') || parts.has('squads') || parts.has('squad')) return 'team';
+  if (parts.has('league')) return 'league';
+  return undefined;
+}
+
 function detectAliases(headers: string[], aliases: Record<string, string[]>, allowFuzzy = true) {
   const normalizedPairs = headers.map((raw) => ({ raw, key: normalizeHeaderKey(raw) }));
   const normalized = normalizedPairs.map((h) => h.key);
@@ -177,10 +186,17 @@ function detectAliases(headers: string[], aliases: Record<string, string[]>, all
 }
 
 function teamSignalScore(headers: string[], rowCount = 0): { matched: string[]; score: number; rawScore: number; boost: number; normalizedHeaders: string[]; hasTeamName: boolean; matchedHeaders: Record<string, string> } {
-  const { matched, normalized, matchedHeaders } = detectAliases(headers, TEAM_SIGNAL_ALIASES);
+  const detected = detectAliases(headers, TEAM_SIGNAL_ALIASES);
+  let matched = detected.matched;
+  let matchedHeaders = detected.matchedHeaders;
+  if (normalizeHeaderKey(matchedHeaders.team_name || '') === 'name' && rowCount < 4) {
+    matched = matched.filter((m) => m !== 'team_name');
+    const { team_name: _ignored, ...rest } = matchedHeaders;
+    matchedHeaders = rest;
+  }
   const hasTeamName = matched.includes('team_name');
   const boost = rowCount >= 10 && hasTeamName ? 5 : 0;
-  return { matched, rawScore: matched.length, boost, score: matched.length + boost, normalizedHeaders: normalized, hasTeamName, matchedHeaders };
+  return { matched, rawScore: matched.length, boost, score: matched.length + boost, normalizedHeaders: detected.normalized, hasTeamName, matchedHeaders };
 }
 
 function detectionDetails(headers: string[], rowCount: number, map: Record<string, string>) {
@@ -239,11 +255,14 @@ function hasHeader(headers: string[], aliases: string[]) {
   return na.some((a) => nh.includes(a));
 }
 
-export function detectFileType(headers: string[], rowCount: number, map: Record<string, string>): CpFileType {
+export function detectFileType(headers: string[], rowCount: number, map: Record<string, string>, fileName?: string): CpFileType {
   const has = (k: string) => Boolean(map[k]);
   const { hasHomeAway, matchScore, teamSignals, leagueScore, looksLikeLeagueSummary } = detectionDetails(headers, rowCount, map);
+  const fileHint = detectFilenameHint(fileName);
 
-  if (hasHomeAway && matchScore >= 3) return 'match';
+  if ((hasHomeAway && matchScore >= 3) || fileHint === 'match') return 'match';
+  if (fileHint === 'team' && !hasHomeAway && (rowCount >= 4 || teamSignals.rawScore >= 3 || teamSignals.hasTeamName)) return 'team';
+  if (fileHint === 'league' && !hasHomeAway && (looksLikeLeagueSummary || leagueScore >= 2)) return 'league';
   // League summary exports have many aggregate columns that look like team stats; protect them before TEAM failsafe.
   if (looksLikeLeagueSummary) return 'league';
   if (teamSignals.rawScore >= 5 || teamSignals.score >= 5 || (teamSignals.hasTeamName && rowCount >= 10) || (has('team') && teamSignals.rawScore >= 3)) return 'team';
@@ -349,7 +368,7 @@ export async function peekCsv(file: File): Promise<ParsedLeagueCsv> {
   const rows = (res.data || []).filter((r) => Object.values(r).some((v) => v !== '' && v != null));
   const headers = (res.meta.fields || []).map(cleanCsvHeader);
   const map = autoMapColumns(headers);
-  const detectedType = detectFileType(headers, rows.length, map);
+  const detectedType = detectFileType(headers, rows.length, map, file.name);
   const identity = extractIdentity(rows, map);
   const fileHint = identityFromFilename(file.name);
   const coverage = coverageFor(map);
