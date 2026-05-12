@@ -11,7 +11,7 @@ type TeamInsert = Database['public']['Tables']['cp_teams']['Insert'];
 type MatchInsert = Database['public']['Tables']['cp_matches']['Insert'];
 
 const EXTRA_ALIASES: Record<string, string[]> = {
-  team: ['team_name', 'team name', 'squad_name', 'club_name', 'common_name'],
+  team: ['team_name', 'team name', 'team', 'squad_name', 'club_name', 'common_name', 'full_name', 'team_full_name', 'name'],
   home: ['team_a_name', 'team a name', 'home_team_name', 'home team name', 'home_name'],
   away: ['team_b_name', 'team b name', 'away_team_name', 'away team name', 'away_name'],
   league: ['league_name', 'competition_name', 'competition', 'division', 'country league'],
@@ -90,27 +90,29 @@ const normalizeHeaderKey = (s: string) =>
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '');
 
+const scoped = (...headers: string[]) => headers.flatMap((h) => [h, `${h}_overall`, `${h}_home`, `${h}_away`, `${h}_total`]);
+
 const TEAM_SIGNAL_ALIASES: Record<string, string[]> = {
-  team_name: ['team_name', 'team', 'club', 'squad', 'squad_name', 'common_name'],
-  matches_played: ['matches_played', 'matches', 'played', 'games_played', 'games', 'mp', 'gp'],
-  wins: ['wins', 'won'],
-  draws: ['draws', 'drawn'],
-  losses: ['losses', 'lost'],
-  points_per_game: ['points_per_game', 'ppg', 'points_pg', 'points_per_match'],
-  league_position: ['league_position', 'position', 'rank', 'rk', 'pos'],
-  goals_scored: ['goals_scored', 'goals_for', 'gf', 'scored'],
-  goals_conceded: ['goals_conceded', 'goals_against', 'ga', 'gc', 'conceded'],
-  goal_difference: ['goal_difference', 'goal_diff', 'gd'],
-  clean_sheets: ['clean_sheets', 'clean_sheet', 'cs'],
-  btts_percentage: ['btts_percentage', 'btts_percentage_overall', 'both_teams_to_score_percentage'],
-  fts_percentage: ['fts_percentage', 'failed_to_score_percentage'],
-  corners_per_match: ['corners_per_match', 'corners_per_match_overall', 'corners_pg'],
-  cards_per_match: ['cards_per_match', 'cards_per_match_overall', 'cards_pg'],
-  win_percentage: ['win_percentage', 'wins_percentage', 'win_percent'],
-  over25_percentage: ['over25_percentage', 'over25_percentage_overall', 'over_25_percentage', 'over_2_5_percentage'],
-  under25_percentage: ['under25_percentage', 'under25_percentage_overall', 'under_25_percentage', 'under_2_5_percentage'],
-  goals_scored_per_match: ['goals_scored_per_match', 'goals_per_match_scored', 'goals_scored_pg', 'goals_for_per_match'],
-  goals_conceded_per_match: ['goals_conceded_per_match', 'goals_per_match_conceded', 'goals_conceded_pg', 'goals_against_per_match'],
+  team_name: ['team_name', 'team', 'club', 'club_name', 'squad', 'squad_name', 'common_name', 'full_name', 'team_full_name', 'name'],
+  matches_played: scoped('matches_played', 'matches', 'played', 'games_played', 'games', 'mp', 'gp'),
+  wins: scoped('wins', 'win', 'won'),
+  draws: scoped('draws', 'draw', 'drawn'),
+  losses: scoped('losses', 'loss', 'lost'),
+  points_per_game: scoped('points_per_game', 'ppg', 'points_pg', 'points_per_match', 'points_per_game_per_match'),
+  league_position: ['league_position', 'position', 'table_position', 'rank', 'ranking', 'rk', 'pos'],
+  goals_scored: scoped('goals_scored', 'goals_for', 'gf', 'scored', 'total_goals_scored'),
+  goals_conceded: scoped('goals_conceded', 'goals_against', 'ga', 'gc', 'conceded', 'total_goals_conceded'),
+  goal_difference: scoped('goal_difference', 'goal_diff', 'gd'),
+  clean_sheets: scoped('clean_sheets', 'clean_sheet', 'cs', 'clean_sheets_percentage'),
+  btts_percentage: scoped('btts_percentage', 'btts_percent', 'btts', 'both_teams_to_score_percentage'),
+  fts_percentage: scoped('fts_percentage', 'fts_percent', 'failed_to_score_percentage'),
+  corners_per_match: scoped('corners_per_match', 'corners_pg', 'corners_per_game', 'average_corners_per_match'),
+  cards_per_match: scoped('cards_per_match', 'cards_pg', 'cards_per_game', 'average_cards_per_match'),
+  win_percentage: scoped('win_percentage', 'wins_percentage', 'win_percent', 'win_rate'),
+  over25_percentage: scoped('over25_percentage', 'over25_percent', 'over_25_percentage', 'over_2_5_percentage'),
+  under25_percentage: scoped('under25_percentage', 'under25_percent', 'under_25_percentage', 'under_2_5_percentage'),
+  goals_scored_per_match: scoped('goals_scored_per_match', 'goals_per_match_scored', 'goals_scored_pg', 'goals_for_per_match', 'goals_scored_per_game', 'gf_per_match'),
+  goals_conceded_per_match: scoped('goals_conceded_per_match', 'goals_per_match_conceded', 'goals_conceded_pg', 'goals_against_per_match', 'goals_conceded_per_game', 'ga_per_match'),
 };
 
 const MATCH_SIGNAL_ALIASES: Record<string, string[]> = {
