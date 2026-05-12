@@ -96,7 +96,7 @@ export default function CentoPower() {
       const lg = leagues.find((l) => l.id === m.league_id);
       const bets = buildValueBets(m, home, away, {
         bankroll,
-        edgeMin: 0,
+        edgeMin: -100,
         kellyFraction: filters.stakeMode === 'flat' ? 0 : 1,
         maxStakePct: Number.POSITIVE_INFINITY,
       });
