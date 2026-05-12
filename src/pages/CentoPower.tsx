@@ -20,6 +20,7 @@ import { analyzeMatch } from '@/lib/cento/engine';
 import type { LeagueStats, ParsedMatch, TeamProfile } from '@/lib/cento/footystats/types';
 import type { PowerAnalysis } from '@/lib/cento/engine/types';
 import { fuzzyMatch, normalizeTeamName } from '@/lib/cento/footystats/util';
+import { isoDateFromRaw } from '@/lib/cento/footystats/date';
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
 import { Upload, Trash2, Database, Calendar, Trophy } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
@@ -67,18 +68,20 @@ export default function CentoPower() {
       return undefined;
     };
     const upcoming = data.matches.filter((m) => {
-      const s = (m.stats ?? {}) as { played?: boolean; homeGoals?: number | null; awayGoals?: number | null };
-      // Unplayed if explicitly flagged or no final score recorded
+      const s = (m.stats ?? {}) as { played?: boolean; homeGoals?: number | null; awayGoals?: number | null; raw?: Record<string, unknown>; date?: string | null; timestamp?: number | null };
+      const status = String(s.raw?.status ?? '').toLowerCase();
+      if (status === 'incomplete' || status === 'scheduled' || status === 'postponed') return true;
+      if (s.played === false) return true;
       if (s.played === true) return false;
-      if (s.homeGoals !== null && s.homeGoals !== undefined && s.awayGoals !== null && s.awayGoals !== undefined) return false;
-      return true;
+      return !(s.homeGoals !== null && s.homeGoals !== undefined && s.awayGoals !== null && s.awayGoals !== undefined);
     });
     return upcoming.map((m) => {
       const stats = (m.stats ?? {}) as ParsedMatch;
       const odds = (m.odds ?? {}) as Record<string, number | null>;
+      const matchDate = isoDateFromRaw(stats.raw, m.match_date ?? stats.date, stats.timestamp);
       const matchObj: ParsedMatch = {
         ...stats,
-        date: m.match_date,
+        date: matchDate,
         home: m.home, away: m.away,
         oddsHome: odds.oddsHome ?? null, oddsDraw: odds.oddsDraw ?? null, oddsAway: odds.oddsAway ?? null,
         oddsBttsYes: odds.oddsBttsYes ?? null, oddsBttsNo: odds.oddsBttsNo ?? null,
@@ -86,7 +89,7 @@ export default function CentoPower() {
       };
       const a = analyzeMatch(matchObj, findTeam(m.home), findTeam(m.away), leagueStats);
       return { league: activeLeague, analysis: a };
-    }).sort((a, b) => (a.analysis.match.date ?? '').localeCompare(b.analysis.match.date ?? ''));
+    }).sort((a, b) => (a.analysis.match.date ?? '9999-99-99').localeCompare(b.analysis.match.date ?? '9999-99-99'));
   }, [activeLeague, data]);
 
   const filtered = analyses.filter((x) => {
