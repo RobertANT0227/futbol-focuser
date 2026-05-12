@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
+import { format } from 'date-fns';
+import { ro } from 'date-fns/locale';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, Zap, UploadCloud, Database, Activity, Wallet, Star } from 'lucide-react';
+import { Search, Zap, UploadCloud, Database, Activity, Wallet, Star, CalendarIcon, X } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
@@ -30,6 +35,7 @@ export default function CentoPower() {
   const [filters, setFilters] = useState<CentoFilters>(initialFilters);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('value');
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
   const reload = useCallback(async () => {
     if (!user) return;
@@ -74,6 +80,11 @@ export default function CentoPower() {
   const filteredBets = useMemo(() => {
     return allBets.filter((b) => {
       if (selectedLeague && !b.league.includes(leagues.find((l) => l.id === selectedLeague)?.name || '____')) return false;
+      if (selectedDate) {
+        const m = matches.find((mm) => mm.id === b.matchId);
+        const iso = format(selectedDate, 'yyyy-MM-dd');
+        if (!m || m.match_date !== iso) return false;
+      }
       if (b.edge < filters.edgeMin) return false;
       if (b.confidence < filters.confidenceMin) return false;
       if (b.sampleSize < filters.sampleSizeMin) return false;
@@ -85,7 +96,13 @@ export default function CentoPower() {
       if (search && !`${b.home} ${b.away} ${b.league}`.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     }).sort((a, b) => b.edge - a.edge);
-  }, [allBets, filters, search, selectedLeague, leagues]);
+  }, [allBets, filters, search, selectedLeague, leagues, selectedDate, matches]);
+
+  const matchesOnDate = useMemo(() => {
+    if (!selectedDate) return null;
+    const iso = format(selectedDate, 'yyyy-MM-dd');
+    return matches.filter((m) => m.match_date === iso);
+  }, [selectedDate, matches]);
 
   const leagueNames = useMemo(() => Array.from(new Set(leagues.map((l) => l.name))), [leagues]);
 
@@ -171,9 +188,38 @@ export default function CentoPower() {
             </TabsList>
 
             <TabsContent value="value" className="mt-4">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className={cn('h-9', !selectedDate && 'text-muted-foreground')}>
+                      <CalendarIcon className="h-4 w-4 mr-2" />
+                      {selectedDate ? format(selectedDate, 'd MMM yyyy', { locale: ro }) : 'Alege dată meciuri'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      initialFocus
+                      className={cn('p-3 pointer-events-auto')}
+                    />
+                  </PopoverContent>
+                </Popover>
+                {selectedDate && (
+                  <>
+                    <Badge variant="outline" className="border-primary/40 text-primary">
+                      {matchesOnDate?.length || 0} meciuri în CSV pe {format(selectedDate, 'd MMM yyyy', { locale: ro })}
+                    </Badge>
+                    <Button variant="ghost" size="sm" className="h-8" onClick={() => setSelectedDate(undefined)}>
+                      <X className="h-3.5 w-3.5 mr-1" /> Resetează data
+                    </Button>
+                  </>
+                )}
+              </div>
               <StickyFilters filters={filters} setFilters={setFilters} leagues={leagueNames} />
               {filteredBets.length === 0 ? (
-                <EmptyHint />
+                <EmptyHint hasDate={Boolean(selectedDate)} matchesOnDate={matchesOnDate?.length || 0} />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                   {filteredBets.map((b) => (
@@ -231,12 +277,14 @@ function KPI({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function EmptyHint() {
+function EmptyHint({ hasDate, matchesOnDate }: { hasDate?: boolean; matchesOnDate?: number } = {}) {
   return (
     <Card className="p-12 text-center bg-card/40">
       <div className="text-base font-semibold mb-1">Niciun value bet detectat</div>
       <div className="text-sm text-muted-foreground">
-        Importă CSV-uri sau relaxează filtrele (Edge Min, interval cote).
+        {hasDate
+          ? `Pentru data selectată sunt ${matchesOnDate ?? 0} meciuri în CSV. Relaxează filtrele (Edge Min, interval cote) sau alege altă dată.`
+          : 'Importă CSV-uri sau relaxează filtrele (Edge Min, interval cote).'}
       </div>
     </Card>
   );
