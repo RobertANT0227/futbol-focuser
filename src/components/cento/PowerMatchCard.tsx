@@ -117,8 +117,20 @@ export function PowerMatchCard({ a, leagueName }: { a: PowerAnalysis; leagueName
           </div>
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-          Modelul recomandă <strong className="text-foreground">PASS</strong> — variabilitate mare sau date insuficiente.
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm space-y-1.5">
+          <div className="font-bold text-destructive flex items-center gap-2">⛔ PASS — motivul pe scurt:</div>
+          <ul className="text-xs text-foreground/90 space-y-0.5 pl-4 list-disc">
+            {passReasons.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* Missing-team warning even when not PASS */}
+      {(!homeTeam || !awayTeam) && grade !== 'PASS' && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] text-amber-200/90">
+          ⚠ Profil lipsă: {!homeTeam && <span className="font-bold">{match.home}</span>}
+          {!homeTeam && !awayTeam && ' & '}
+          {!awayTeam && <span className="font-bold">{match.away}</span>} — verifică numele în CSV teams.
         </div>
       )}
 
