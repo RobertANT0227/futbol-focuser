@@ -19,6 +19,9 @@ import { listLeagues, getLeagueData, deleteLeague, type SyncedLeague, type Synce
 import { analyzeMatch } from '@/lib/cento/engine';
 import type { LeagueStats, ParsedMatch, TeamProfile } from '@/lib/cento/footystats/types';
 import type { PowerAnalysis } from '@/lib/cento/engine/types';
+import { runLegacyOnCento } from '@/lib/cento/legacyAdapter';
+import { LegacyVerdictCard } from '@/components/cento/LegacyVerdictCard';
+import type { AnalysisResult } from '@/lib/types';
 import { fuzzyMatch, normalizeTeamName } from '@/lib/cento/footystats/util';
 import { isoDateFromRaw } from '@/lib/cento/footystats/date';
 import { loadBankrollState, getDefaultBankrollState } from '@/lib/bankroll';
@@ -80,7 +83,7 @@ export default function CentoPower() {
   }, [leagues]);
 
   // Helper: build analyses for a single league
-  const buildAnalyses = (league: SyncedLeague, d: { matches: SyncedMatch[]; teams: SyncedTeam[] }): { league: SyncedLeague; analysis: PowerAnalysis }[] => {
+  const buildAnalyses = (league: SyncedLeague, d: { matches: SyncedMatch[]; teams: SyncedTeam[] }): { league: SyncedLeague; analysis: PowerAnalysis; legacy: AnalysisResult | null }[] => {
     const leagueStats = (league.league_stats ?? {}) as LeagueStats;
     const teamNames = d.teams.map((t) => t.name);
     const findTeam = (name: string): TeamProfile | undefined => {
@@ -110,15 +113,18 @@ export default function CentoPower() {
         oddsBttsYes: odds.oddsBttsYes ?? null, oddsBttsNo: odds.oddsBttsNo ?? null,
         oddsOver25: odds.oddsOver25 ?? null, oddsUnder25: odds.oddsUnder25 ?? null,
       };
-      const a = analyzeMatch(matchObj, findTeam(m.home), findTeam(m.away), leagueStats);
-      return { league, analysis: a };
+      const homeT = findTeam(m.home);
+      const awayT = findTeam(m.away);
+      const a = analyzeMatch(matchObj, homeT, awayT, leagueStats);
+      const legacy = runLegacyOnCento(matchObj, homeT, awayT, leagueStats);
+      return { league, analysis: a, legacy };
     });
   };
 
   // Build analyses
-  const analyses: { league: SyncedLeague; analysis: PowerAnalysis }[] = useMemo(() => {
+  const analyses: { league: SyncedLeague; analysis: PowerAnalysis; legacy: AnalysisResult | null }[] = useMemo(() => {
     if (activeLeagueId === '__all__') {
-      const out: { league: SyncedLeague; analysis: PowerAnalysis }[] = [];
+      const out: { league: SyncedLeague; analysis: PowerAnalysis; legacy: AnalysisResult | null }[] = [];
       for (const l of leagues) {
         const d = allData[l.id];
         if (!d) continue;
@@ -134,7 +140,7 @@ export default function CentoPower() {
 
   // All leagues analyses for Top Picks
   const allAnalyses = useMemo(() => {
-    const out: { league: SyncedLeague; analysis: PowerAnalysis }[] = [];
+    const out: { league: SyncedLeague; analysis: PowerAnalysis; legacy: AnalysisResult | null }[] = [];
     for (const l of leagues) {
       const d = allData[l.id];
       if (!d) continue;
@@ -291,8 +297,11 @@ export default function CentoPower() {
               <Card className="p-6 text-center text-sm text-muted-foreground">Niciun meci viitor.</Card>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {filtered.map(({ analysis, league }, i) => (
-                  <PowerMatchCard key={i} a={analysis} leagueName={league.name} />
+                {filtered.map(({ analysis, league, legacy }, i) => (
+                  <div key={i} className="space-y-2">
+                    <PowerMatchCard a={analysis} leagueName={league.name} />
+                    <LegacyVerdictCard result={legacy} />
+                  </div>
                 ))}
               </div>
             )}
@@ -322,8 +331,11 @@ export default function CentoPower() {
               <Card className="p-6 text-center text-sm text-muted-foreground">Nicio recomandare puternică pentru ligile încărcate.</Card>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {topPicks.map(({ analysis, league }, i) => (
-                  <PowerMatchCard key={i} a={analysis} leagueName={league.name} />
+                {topPicks.map(({ analysis, league, legacy }, i) => (
+                  <div key={i} className="space-y-2">
+                    <PowerMatchCard a={analysis} leagueName={league.name} />
+                    <LegacyVerdictCard result={legacy} />
+                  </div>
                 ))}
               </div>
             )}
