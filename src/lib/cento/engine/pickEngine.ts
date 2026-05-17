@@ -1,5 +1,5 @@
 import type { LeagueStats, ParsedMatch, TeamProfile } from '@/lib/cento/footystats/types';
-import { computeLambdas, computeMarketProbs, computeCornerMarkets } from './probabilities';
+import { computeLambdas, computeMarketProbs, computeCornerMarkets, calibrateDraw } from './probabilities';
 import { computeRatings, computeMatchTempo } from './ratings';
 import { computeQuality } from './quality';
 import type {
@@ -72,12 +72,20 @@ export function analyzeMatch(
   if (prematchHome !== null) lambdaHome = lambdaHome * 0.65 + clampLambda(prematchHome) * 0.35;
   if (prematchAway !== null) lambdaAway = lambdaAway * 0.65 + clampLambda(prematchAway) * 0.35;
 
-  const probs = computeMarketProbs(
+  let probs = computeMarketProbs(
     lambdaHome, lambdaAway,
     match.oddsHome, match.oddsDraw, match.oddsAway,
     match.oddsBttsYes, match.oddsBttsNo,
     match.oddsOver25, match.oddsUnder25,
   );
+  // Smarter draw calibration with full context (replaces the old inline low-total lift).
+  const positionGap = home?.position && away?.position ? Math.abs(home.position - away.position) : null;
+  probs = calibrateDraw(probs, {
+    lambdaTotal: lambdaHome + lambdaAway,
+    leagueDrawPct: league?.drawPct ?? null,
+    positionGap,
+    tempo,
+  });
   const cornerMarkets = computeCornerMarkets(homeT, awayT, league);
   if (cornerMarkets) probs.push(...cornerMarkets);
   const quality = computeQuality(home, away, league, match);
@@ -99,7 +107,14 @@ export function analyzeMatch(
 
   const conflicts = detectConflicts(probs);
   if (conflicts.length) confidence -= 8 * conflicts.length;
-  confidence = Math.max(15, Math.round(confidence));
+  // Variance protection: high mutual volatility erodes confidence.
+  const avgVol = (rh.matchVolatility + ra.matchVolatility) / 2;
+  if (avgVol > 65) confidence -= (avgVol - 65) * 0.25;
+  // Consistency alignment bonus: when top pick agrees with both teams' stable profile.
+  if ((top.key === 'UNDER_2_5' || top.key === 'BTTS_NO') && rh.defensiveStability > 60 && ra.defensiveStability > 60) confidence += 4;
+  if ((top.key === 'OVER_2_5' || top.key === 'BTTS_YES') && rh.offensiveConsistency > 60 && ra.offensiveConsistency > 60) confidence += 4;
+  if (top.key === '1' && rh.homeAdvantage > 65 && rh.attack > 60) confidence += 3;
+  confidence = Math.min(92, Math.max(15, Math.round(confidence)));
 
   const grade = gradeFromConfidence(confidence, top.prob);
   const su = stakeUnits(grade, confidence);
