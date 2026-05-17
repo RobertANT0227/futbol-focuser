@@ -114,7 +114,7 @@ export function analyzeMatch(
   if ((top.key === 'UNDER_2_5' || top.key === 'BTTS_NO') && rh.defensiveStability > 60 && ra.defensiveStability > 60) confidence += 4;
   if ((top.key === 'OVER_2_5' || top.key === 'BTTS_YES') && rh.offensiveConsistency > 60 && ra.offensiveConsistency > 60) confidence += 4;
   if (top.key === '1' && rh.homeAdvantage > 65 && rh.attack > 60) confidence += 3;
-  confidence = Math.max(15, Math.round(confidence));
+  confidence = Math.min(92, Math.max(15, Math.round(confidence)));
 
   const grade = gradeFromConfidence(confidence, top.prob);
   const su = stakeUnits(grade, confidence);
