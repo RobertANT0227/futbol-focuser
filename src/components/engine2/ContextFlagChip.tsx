@@ -7,7 +7,7 @@ const STYLE: Record<ContextFlag, string> = {
   STRONG_HOME_ENV: 'bg-primary/15 text-primary border-primary/30',
   LOW_SCORING_LEAGUE: 'bg-secondary text-secondary-foreground border-border',
   HIGH_DRAW_TENDENCY: 'bg-accent/10 text-accent border-accent/25',
-  LATE_SCORING_TEAMS: 'bg-[hsl(var(--bet-corners))/0.15] text-[hsl(var(--bet-corners))] border-[hsl(var(--bet-corners))/0.3]',
+  LATE_SCORING_TEAMS: 'bg-bet-corners/15 text-bet-corners border-bet-corners/30',
   INCONSISTENT_FORM: 'bg-destructive/10 text-destructive border-destructive/25',
 };
 
