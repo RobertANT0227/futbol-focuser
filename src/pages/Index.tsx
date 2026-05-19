@@ -1,222 +1,240 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { UploadCenter } from '@/components/cento/UploadCenter';
-import { PowerMatchCard2 } from '@/components/engine2/PowerMatchCard2';
-import { analyzeMatch2 } from '@/lib/engine2';
-import type { PowerAnalysis2, PickGrade } from '@/lib/engine2/types';
+import { MatchInputForm, defaultMatch } from '@/components/MatchInputForm';
+import { PasteImporter } from '@/components/PasteImporter';
+import { PlanForm, defaultPlan } from '@/components/PlanForm';
+import { VerdictDisplay } from '@/components/VerdictDisplay';
+import { DailyTop } from '@/components/DailyTop';
+import { HowItWorks } from '@/components/HowItWorks';
+import { runAnalysis } from '@/lib/engine';
+import { saveSyncedTopBets, type SyncedTopBet, loadSyncedTopBets } from '@/lib/bankroll';
 import { useAuth } from '@/contexts/AuthContext';
-import { listLeagues, getLeagueData, type SyncedLeague, type SyncedMatch, type SyncedTeam } from '@/lib/cento/persistence';
-import { fuzzyMatch, normalizeTeamName } from '@/lib/cento/footystats/util';
-import { isoDateFromRaw } from '@/lib/cento/footystats/date';
-import type { LeagueStats, ParsedMatch, TeamProfile } from '@/lib/cento/footystats/types';
-import { Upload, Database, Trophy, Zap } from 'lucide-react';
-
-type AnalysisItem = { league: SyncedLeague; analysis: PowerAnalysis2 };
-
-const GRADES: (PickGrade | 'ALL')[] = ['ALL', 'STRONG', 'MEDIUM', 'RISKY', 'PASS'];
-const MARKETS = ['ALL', '1X2', 'BTTS', 'OVER25'] as const;
-type MarketFilter = (typeof MARKETS)[number];
+import { ROBOT_DAILY_LIMIT_CLIENT, getTodayRobotUsage, recordRobotUsage } from '@/lib/robotQuota';
+import { toast } from '@/hooks/use-toast';
+import type { MatchData, UserPlan, AnalysisResult, DailyMatch } from '@/lib/types';
 
 const Index = () => {
-  const { user } = useAuth();
-  const [leagues, setLeagues] = useState<SyncedLeague[]>([]);
-  const [allData, setAllData] = useState<Record<string, { matches: SyncedMatch[]; teams: SyncedTeam[] }>>({});
-  const [activeLeagueId, setActiveLeagueId] = useState<string>('__all__');
-  const [uploadOpen, setUploadOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [gradeFilter, setGradeFilter] = useState<PickGrade | 'ALL'>('ALL');
-  const [marketFilter, setMarketFilter] = useState<MarketFilter>('ALL');
-  const [tab, setTab] = useState<'today' | 'upcoming' | 'all'>('upcoming');
+  const { user, isOwner, isTrial } = useAuth();
+  const [match, setMatch] = useState<MatchData>(defaultMatch());
+  const [plan, setPlan] = useState<UserPlan>(defaultPlan);
+  const [planSet, setPlanSet] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [dailyMatches, setDailyMatches] = useState<DailyMatch[]>([]);
+  const [savedMatch, setSavedMatch] = useState<MatchData | null>(null);
+  const [robotUsedToday, setRobotUsedToday] = useState<number>(0);
 
-  const reload = async () => {
-    if (!user) return;
-    const ls = await listLeagues(user.id);
-    setLeagues(ls);
+  // Load today's robot usage for trial
+  useEffect(() => {
+    if (!user || !isTrial) return;
+    getTodayRobotUsage(user.id).then(setRobotUsedToday);
+  }, [user, isTrial]);
+
+  const robotRemaining = isTrial ? Math.max(0, ROBOT_DAILY_LIMIT_CLIENT - robotUsedToday) : Infinity;
+  const robotBlocked = isTrial && robotRemaining <= 0;
+
+  const handleAnalyze = async () => {
+    if (robotBlocked) {
+      toast({
+        title: 'Limită atinsă',
+        description: `Ai folosit cele ${ROBOT_DAILY_LIMIT_CLIENT} analize zilnice. Reîncearcă mâine.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Consume quota for trial BEFORE analysis
+    if (isTrial && user) {
+      const ok = await recordRobotUsage(user.id);
+      if (!ok) {
+        toast({ title: 'Eroare', description: 'Nu s-a putut înregistra utilizarea.', variant: 'destructive' });
+        return;
+      }
+      setRobotUsedToday((n) => n + 1);
+    }
+
+    setAnalyzing(true);
+    setSavedMatch({ ...match });
+    setTimeout(() => {
+      const analysis = runAnalysis(match, planSet ? plan : undefined);
+      setResult(analysis);
+      setAnalyzing(false);
+
+      // Sync top bets to Bankroll Manager (only useful for owner; harmless for client)
+      if (isOwner) {
+        const matchLabel = `${match.homeTeam.name} vs ${match.awayTeam.name}`;
+        const synced: SyncedTopBet[] = analysis.recommendations
+          .filter((r) => r.value > 0)
+          .sort((a, b) => b.ev - a.ev)
+          .map((r) => ({
+            matchLabel,
+            selection: r.selection,
+            category: r.category,
+            odds: r.odds,
+            winRate: r.winRate,
+            ev: r.ev,
+            value: r.value,
+            stakeConfidence: r.stakeConfidence,
+            stakePct: r.stakePct,
+            stakeLei: r.stakeLei,
+            fragile: r.fragile,
+            risk: r.risk,
+            addedAt: new Date().toISOString(),
+          }));
+        const prev = loadSyncedTopBets().filter((b) => b.matchLabel !== matchLabel);
+        saveSyncedTopBets([...prev, ...synced]);
+      }
+    }, 500);
   };
 
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [user?.id]);
-
-  useEffect(() => {
-    if (!leagues.length) return;
-    let cancelled = false;
-    (async () => {
-      const missing = leagues.filter((l) => !allData[l.id]);
-      if (!missing.length) return;
-      const entries = await Promise.all(missing.map(async (l) => {
-        try { return [l.id, await getLeagueData(l.id)] as const; }
-        catch { return [l.id, { matches: [] as SyncedMatch[], teams: [] as SyncedTeam[] }] as const; }
-      }));
-      if (cancelled) return;
-      setAllData((prev) => {
-        const next = { ...prev };
-        for (const [id, d] of entries) next[id] = d;
-        return next;
-      });
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line
-  }, [leagues]);
-
-  const analyses: AnalysisItem[] = useMemo(() => {
-    const out: AnalysisItem[] = [];
-    const target = activeLeagueId === '__all__' ? leagues : leagues.filter((l) => l.id === activeLeagueId);
-    for (const league of target) {
-      const d = allData[league.id];
-      if (!d) continue;
-      const leagueStats = (league.league_stats ?? {}) as LeagueStats;
-      const names = d.teams.map((t) => t.name);
-      const find = (name: string): TeamProfile | undefined => {
-        const direct = d.teams.find((t) => normalizeTeamName(t.name) === normalizeTeamName(name));
-        if (direct) return direct.stats as TeamProfile;
-        const fz = fuzzyMatch(name, names);
-        return fz ? (d.teams.find((t) => t.name === fz)?.stats as TeamProfile | undefined) : undefined;
-      };
-      for (const m of d.matches) {
-        const stats = (m.stats ?? {}) as ParsedMatch;
-        const status = String(stats.raw?.status ?? '').toLowerCase();
-        const upcoming = status === 'incomplete' || status === 'scheduled' || status === 'postponed' || stats.played === false;
-        if (!upcoming) continue;
-        const odds = (m.odds ?? {}) as Record<string, number | null>;
-        const matchDate = isoDateFromRaw(stats.raw, m.match_date ?? stats.date, stats.timestamp);
-        const matchObj: ParsedMatch = {
-          ...stats,
-          date: matchDate,
-          home: m.home, away: m.away,
-          oddsHome: odds.oddsHome ?? null, oddsDraw: odds.oddsDraw ?? null, oddsAway: odds.oddsAway ?? null,
-          oddsBttsYes: odds.oddsBttsYes ?? null, oddsBttsNo: odds.oddsBttsNo ?? null,
-          oddsOver25: odds.oddsOver25 ?? null, oddsUnder25: odds.oddsUnder25 ?? null,
-        };
-        out.push({ league, analysis: analyzeMatch2(matchObj, find(m.home), find(m.away), leagueStats) });
-      }
+  const handleReverse = () => {
+    if (savedMatch) {
+      setMatch(savedMatch);
     }
-    return out.sort((a, b) => b.analysis.confidence - a.analysis.confidence);
-  }, [leagues, allData, activeLeagueId]);
+    setResult(null);
+    setSavedMatch(null);
+  };
 
-  const today = new Date().toISOString().slice(0, 10);
-  const filtered = useMemo(() => {
-    return analyses.filter((x) => {
-      const d = x.analysis.match.date ?? '';
-      if (tab === 'today' && d !== today) return false;
-      if (tab === 'upcoming' && d && d < today) return false;
-      if (gradeFilter !== 'ALL' && x.analysis.grade !== gradeFilter) return false;
-      if (marketFilter !== 'ALL') {
-        const key = x.analysis.topMarket.key;
-        if (marketFilter === '1X2' && !['1', 'X', '2'].includes(key)) return false;
-        if (marketFilter === 'BTTS' && !key.startsWith('BTTS')) return false;
-        if (marketFilter === 'OVER25' && !['OVER_2_5', 'UNDER_2_5'].includes(key)) return false;
-      }
-      if (search) {
-        const s = search.toLowerCase();
-        if (!x.analysis.match.home.toLowerCase().includes(s) && !x.analysis.match.away.toLowerCase().includes(s)) return false;
-      }
-      return true;
-    });
-  }, [analyses, gradeFilter, marketFilter, search, tab, today]);
-
-  const totals = useMemo(() => {
-    const g: Record<PickGrade, number> = { STRONG: 0, MEDIUM: 0, RISKY: 0, PASS: 0 };
-    for (const a of analyses) g[a.analysis.grade]++;
-    return g;
-  }, [analyses]);
+  const handleAddToDaily = () => {
+    if (!result) return;
+    const dm: DailyMatch = {
+      id: crypto.randomUUID(),
+      match: { ...match },
+      result,
+      addedAt: new Date(),
+    };
+    setDailyMatches(prev => [...prev, dm]);
+    setMatch(defaultMatch());
+    setResult(null);
+    setSavedMatch(null);
+  };
 
   return (
-    <div className="container max-w-7xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Zap className="h-6 w-6 text-primary" /> Cento Power <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground px-2 py-0.5 border border-primary/30 rounded">engine v2</span>
-          </h1>
-          <p className="text-xs text-muted-foreground font-mono">FootyStats powered · multi-ligă · tipster intelligence</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Card className="px-3 py-1.5 bg-card/60 hidden md:block">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Picks</div>
-            <div className="text-xs font-mono font-bold flex gap-2">
-              <span className="text-primary">🟢 {totals.STRONG}</span>
-              <span className="text-accent">🟡 {totals.MEDIUM}</span>
-              <span className="text-muted-foreground">🟠 {totals.RISKY}</span>
-              <span className="text-muted-foreground/70">⚪ {totals.PASS}</span>
+    <div className="min-h-screen bg-background">
+      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="container max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚽</span>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight">BetAnalyzer AI</h1>
+              <p className="text-xs text-muted-foreground">Professional Football Betting Intelligence</p>
             </div>
-          </Card>
-          <Sheet open={uploadOpen} onOpenChange={setUploadOpen}>
-            <SheetTrigger asChild>
-              <Button className="font-bold gap-2"><Upload className="h-4 w-4" /> Import CSV</Button>
-            </SheetTrigger>
-            <SheetContent className="sm:max-w-xl overflow-y-auto">
-              <SheetHeader>
-                <SheetTitle>Import FootyStats</SheetTitle>
-              </SheetHeader>
-              <div className="mt-6">
-                <UploadCenter onSynced={() => { setUploadOpen(false); reload(); }} />
-              </div>
-            </SheetContent>
-          </Sheet>
+          </div>
+          <div className="flex items-center gap-3">
+            <HowItWorks steps={result?.analysisSteps} result={result} />
+          </div>
         </div>
-      </div>
+      </header>
 
-      {leagues.length === 0 ? (
-        <Card className="p-10 text-center bg-card/40 border-dashed">
-          <Database className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <h3 className="font-bold mb-1">Nicio ligă încărcată</h3>
-          <p className="text-sm text-muted-foreground mb-4">Importă cele 3 CSV-uri FootyStats pentru o ligă (league + matches + teams).</p>
-          <Button onClick={() => setUploadOpen(true)} className="font-bold">Importă acum</Button>
-        </Card>
-      ) : (
-        <>
-          {/* Filters */}
-          <Card className="p-3 bg-card/60 flex items-center gap-2 flex-wrap">
-            <Select value={activeLeagueId} onValueChange={setActiveLeagueId}>
-              <SelectTrigger className="w-[260px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">🌍 Toate ligile</SelectItem>
-                {leagues.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>{l.country ? `${l.country} · ` : ''}{l.name} · {l.season}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input placeholder="Caută echipă..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
-            <Select value={gradeFilter} onValueChange={(v) => setGradeFilter(v as PickGrade | 'ALL')}>
-              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {GRADES.map((g) => <SelectItem key={g} value={g}>{g === 'ALL' ? 'Toate gradele' : g}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={marketFilter} onValueChange={(v) => setMarketFilter(v as MarketFilter)}>
-              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {MARKETS.map((m) => <SelectItem key={m} value={m}>{m === 'ALL' ? 'Toate piețele' : m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Badge variant="outline" className="font-mono text-[10px] ml-auto"><Trophy className="h-3 w-3 mr-1" />{filtered.length} meciuri</Badge>
-          </Card>
+      <main className="container max-w-6xl mx-auto px-4 py-6 space-y-6">
+        {/* Daily Top */}
+        <DailyTop matches={dailyMatches} onClear={() => setDailyMatches([])} />
 
-          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-            <TabsList>
-              <TabsTrigger value="today">Today</TabsTrigger>
-              <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-              <TabsTrigger value="all">All</TabsTrigger>
-            </TabsList>
-            <TabsContent value={tab} className="mt-4">
-              {filtered.length === 0 ? (
-                <Card className="p-6 text-center text-sm text-muted-foreground">Niciun meci pentru filtrele active.</Card>
-              ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                  {filtered.map(({ analysis, league }, i) => (
-                    <PowerMatchCard2 key={i} a={analysis} leagueName={league.name} />
-                  ))}
+        {/* Plan */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 1: Plan personalizat</h2>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={planSet}
+                onChange={e => setPlanSet(e.target.checked)}
+                className="rounded border-border"
+              />
+              <span className="text-xs text-muted-foreground">Activează planul</span>
+            </label>
+          </div>
+          {planSet && <PlanForm plan={plan} onChange={setPlan} />}
+          {!planSet && (
+            <div className="rounded-lg border border-border bg-card/50 p-4 text-center">
+              <p className="text-sm text-muted-foreground">💡 Activează planul personalizat pentru filtrarea automată a pariurilor după risc și preferințe.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Match Data - hide when result is shown */}
+        {!result && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pasul 2: Date meci (medii/meci)</h2>
+              <PasteImporter match={match} onChange={setMatch} />
+            </div>
+            <MatchInputForm match={match} onChange={setMatch} />
+          </div>
+        )}
+
+        {/* Analyze / Reverse buttons */}
+        <div className="text-center space-y-3">
+          {!result ? (
+            <>
+              {isTrial && (
+                <div className="text-xs text-muted-foreground">
+                  🤖 Analize rămase azi:{' '}
+                  <span className={`font-mono font-bold ${robotBlocked ? 'text-destructive' : 'text-primary'}`}>
+                    {robotRemaining}/{ROBOT_DAILY_LIMIT_CLIENT}
+                  </span>
                 </div>
               )}
-            </TabsContent>
-          </Tabs>
-        </>
-      )}
+              <Button
+                size="lg"
+                onClick={handleAnalyze}
+                disabled={analyzing || robotBlocked}
+                className="px-12 font-bold"
+              >
+                {analyzing ? (
+                  <span className="flex items-center gap-2">
+                    <span className="animate-pulse-glow">⏳</span> Analizez...
+                  </span>
+                ) : robotBlocked ? (
+                  <span className="flex items-center gap-2">🚫 Limită atinsă</span>
+                ) : (
+                  <span className="flex items-center gap-2">🔬 Analizează meciul</span>
+                )}
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={handleReverse}
+              className="px-8 font-bold border-accent text-accent hover:bg-accent hover:text-accent-foreground gap-2"
+            >
+              🔄 Reverse — Editează datele
+            </Button>
+          )}
+        </div>
+
+        {/* Results */}
+        {result && (
+          <>
+            <VerdictDisplay
+              result={result}
+              homeTeamName={match.homeTeam.name}
+              awayTeamName={match.awayTeam.name}
+            />
+            <div className="text-center">
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={handleAddToDaily}
+                className="px-8 font-bold border-accent text-accent hover:bg-accent hover:text-accent-foreground gap-2"
+              >
+                🏅 Adaugă în Top of the Day
+              </Button>
+              <p className="text-xs text-muted-foreground mt-1">
+                Adaugă acest meci în topul zilei și continuă cu alt meci
+              </p>
+            </div>
+          </>
+        )}
+      </main>
+
+      <footer className="border-t border-border py-4 mt-8">
+        <p className="text-center text-xs text-muted-foreground">
+          ⚠️ Acest robot este un instrument de analiză statistică. Pariurile sportive implică risc. Jucați responsabil.
+        </p>
+      </footer>
     </div>
   );
 };

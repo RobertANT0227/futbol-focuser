@@ -79,12 +79,8 @@ export function computeLambdas(
   lambdaAway = lambdaAway * sA + lgAwayAvg * (1 - sA);
 
   // momentum/form micro adjustment (±5%)
-  // Recency: form + momentum + ppg deviation. Capped at ±7% to avoid runaway.
-  const ppgAdj = (t: TeamProfile) => (t.ppg !== null ? (t.ppg - 1.4) / 80 : 0);
-  let formAdjH = (rh.form - 50) / 800 + (rh.momentum - 50) / 1600 + ppgAdj(home);
-  let formAdjA = (ra.form - 50) / 800 + (ra.momentum - 50) / 1600 + ppgAdj(away);
-  formAdjH = Math.max(-0.07, Math.min(0.07, formAdjH));
-  formAdjA = Math.max(-0.07, Math.min(0.07, formAdjA));
+  const formAdjH = (rh.form - 50) / 1000 + (rh.momentum - 50) / 2000;
+  const formAdjA = (ra.form - 50) / 1000 + (ra.momentum - 50) / 2000;
   lambdaHome *= 1 + formAdjH;
   lambdaAway *= 1 + formAdjA;
 
@@ -113,7 +109,12 @@ export function computeMarketProbs(
       if (i + j >= 3) pOver += p;
     }
   }
-  // (Draw calibration moved to calibrateDraw() — called from pickEngine with full context.)
+  // small draw boost when both lambdas low (defensive matches)
+  if (lambdaHome + lambdaAway < 2.2) {
+    const lift = 0.04;
+    pDraw += lift;
+    pHome -= lift / 2; pAway -= lift / 2;
+  }
   // normalize
   const sum = pHome + pDraw + pAway;
   pHome /= sum; pDraw /= sum; pAway /= sum;
@@ -126,36 +127,6 @@ export function computeMarketProbs(
     { key: 'OVER_2_5', label: 'Over 2.5', prob: pOver, odds: validOdds(oddsOver) },
     { key: 'UNDER_2_5', label: 'Under 2.5', prob: 1 - pOver, odds: validOdds(oddsUnder) },
   ];
-}
-
-/**
- * Smarter draw calibration combining: total xG, league draw %, position gap, tempo.
- * Preserves market ranking behavior — only nudges 1X2 then renormalizes.
- */
-export function calibrateDraw(
-  probs: MarketProb[],
-  ctx: { lambdaTotal: number; leagueDrawPct: number | null; positionGap: number | null; tempo: number },
-): MarketProb[] {
-  let lift = 0;
-  if (ctx.lambdaTotal < 2.2) lift += 0.025;
-  if (ctx.lambdaTotal < 1.8) lift += 0.015;
-  if (ctx.leagueDrawPct !== null && ctx.leagueDrawPct >= 28) lift += 0.02;
-  if (ctx.positionGap !== null && ctx.positionGap <= 3) lift += 0.025;
-  if (ctx.tempo < 45) lift += 0.015;
-  if (lift <= 0) return probs;
-  lift = Math.min(0.08, lift);
-  const out = probs.map((p) => {
-    if (p.key === 'X') return { ...p, prob: Math.min(0.6, p.prob + lift) };
-    if (p.key === '1' || p.key === '2') return { ...p, prob: Math.max(0.05, p.prob - lift / 2) };
-    return p;
-  });
-  // renormalize only 1X2 triplet
-  const h = out.find((p) => p.key === '1')!;
-  const d = out.find((p) => p.key === 'X')!;
-  const a = out.find((p) => p.key === '2')!;
-  const s = h.prob + d.prob + a.prob;
-  h.prob /= s; d.prob /= s; a.prob /= s;
-  return out;
 }
 
 /**
@@ -187,6 +158,7 @@ export function computeCornerMarkets(home: TeamProfile, away: TeamProfile, leagu
   const out: MarketProb[] = [];
   const cfg: { line: number; over: MarketProb['key']; under: MarketProb['key'] }[] = [
     { line: 10.5, over: 'OVER_CORNERS_10_5', under: 'UNDER_CORNERS_10_5' },
+    { line: 11.5, over: 'OVER_CORNERS_11_5', under: 'UNDER_CORNERS_11_5' },
   ];
   for (const c of cfg) {
     const pOver = probAtLeast(Math.ceil(c.line));
