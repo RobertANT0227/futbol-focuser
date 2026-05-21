@@ -9,7 +9,6 @@ import { cn } from '@/lib/utils';
 import { PickBadge } from './PickBadge';
 import { QualityChip } from './QualityChip';
 import { RatingBar } from './RatingBar';
-import { MarketRow } from './MarketRow';
 import { MatchExplanationPanel } from './MatchExplanationPanel';
 import type { PowerAnalysis } from '@/lib/cento-v2/engine/types';
 
@@ -81,12 +80,6 @@ export function PowerMatchCard({ a }: { a: PowerAnalysis }) {
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-3 space-y-3">
-              <div className="space-y-2">
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Toate piețele</div>
-                {a.markets.map((m) => (
-                  <MarketRow key={m.key} m={m} highlight={m.key === top.key} />
-                ))}
-              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Card className="p-3 bg-card/60 space-y-2">
                   <div className="text-xs font-bold">{a.home} <span className="text-[10px] text-muted-foreground">acasă</span></div>

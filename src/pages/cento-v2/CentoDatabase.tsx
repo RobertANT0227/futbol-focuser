@@ -17,7 +17,6 @@ const COLS: Col[] = [
   { key: 'ppg', label: 'PPG', get: (t) => t.ppg },
   { key: 'goalsFor', label: 'GF', get: (t) => t.goalsFor },
   { key: 'goalsAgainst', label: 'GA', get: (t) => t.goalsAgainst },
-  { key: 'bttsPct', label: 'BTTS%', get: (t) => t.bttsPct },
   { key: 'over25Pct', label: 'Over2.5%', get: (t) => t.over25Pct },
   { key: 'cleanSheetsPct', label: 'CS%', get: (t) => t.cleanSheetsPct },
 ];
