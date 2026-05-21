@@ -12,13 +12,22 @@ export interface CentoDataState {
   data: { matches: SyncedMatch[]; teams: SyncedTeam[] } | null;
   loading: boolean;
   analyses: AnalysisRow[];
+  availableDates: string[];
   reload: () => Promise<void>;
 }
+
+const LS_LEAGUE = 'cento.activeLeagueId';
 
 export function useCentoData(): CentoDataState {
   const { user } = useAuth();
   const [leagues, setLeagues] = useState<SyncedLeague[]>([]);
-  const [activeLeagueId, setActiveLeagueId] = useState<string | null>(null);
+  const [activeLeagueId, setActiveLeagueIdState] = useState<string | null>(() => {
+    try { return sessionStorage.getItem(LS_LEAGUE); } catch { return null; }
+  });
+  const setActiveLeagueId = (id: string | null) => {
+    setActiveLeagueIdState(id);
+    try { if (id) sessionStorage.setItem(LS_LEAGUE, id); else sessionStorage.removeItem(LS_LEAGUE); } catch { /* noop */ }
+  };
   const [data, setData] = useState<{ matches: SyncedMatch[]; teams: SyncedTeam[] } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +35,8 @@ export function useCentoData(): CentoDataState {
     if (!user) return;
     const ls = await listLeagues(user.id);
     setLeagues(ls);
-    if (!activeLeagueId && ls.length) setActiveLeagueId(ls[0].id);
+    const stillValid = ls.find((l) => l.id === activeLeagueId);
+    if (!stillValid && ls.length) setActiveLeagueId(ls[0].id);
   };
 
   useEffect(() => { reload(); /* eslint-disable-next-line */ }, [user?.id]);
@@ -45,5 +55,11 @@ export function useCentoData(): CentoDataState {
     return buildAnalyses(ds);
   }, [activeLeague, data]);
 
-  return { leagues, activeLeagueId, setActiveLeagueId, activeLeague, data, loading, analyses, reload };
+  const availableDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of analyses) if (r.analysis.matchDate) set.add(r.analysis.matchDate);
+    return [...set].sort();
+  }, [analyses]);
+
+  return { leagues, activeLeagueId, setActiveLeagueId, activeLeague, data, loading, analyses, availableDates, reload };
 }
