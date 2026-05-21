@@ -1,11 +1,9 @@
 // CENTO-V2
 export type PickGrade = 'STRONG' | 'MEDIUM' | 'RISKY' | 'PASS';
-export type MarketKey = 'BTTS_YES' | 'BTTS_NO' | 'OVER25' | 'UNDER25';
+export type MarketKey = 'OVER25' | 'UNDER25';
 export type QualityBand = 'Excellent' | 'Good' | 'Limited';
 
 export const MARKET_LABEL: Record<MarketKey, string> = {
-  BTTS_YES: 'BTTS Da',
-  BTTS_NO: 'BTTS Nu',
   OVER25: 'Over 2.5',
   UNDER25: 'Under 2.5',
 };
@@ -63,22 +61,17 @@ export interface PowerAnalysis {
 
 /** Raw inputs extracted from CSV bundles for math layer. */
 export interface MatchInputs {
-  H_btts: number | null;
-  A_btts: number | null;
   H_fts: number | null;
   A_fts: number | null;
   H_o25: number | null;
   A_o25: number | null;
   H_mp: number | null;
   A_mp: number | null;
-  M_btts: number | null;
   M_o25: number | null;
   L_o25: number | null;
   L_avg: number | null;
   predictionRisk: number | null;
   suspendedMatches: number | null;
-  oddsBttsYes: number | null;
-  oddsBttsNo: number | null;
   oddsOver25: number | null;
   oddsUnder25: number | null;
   hasLeague: boolean;
