@@ -77,22 +77,17 @@ export function buildAnalyses(ds: LeagueDataset): AnalysisRow[] {
     const away = findTeam(m.away);
 
     const inputs: MatchInputs = {
-      H_btts: home?.homeBttsPct ?? home?.bttsPct ?? null,
-      A_btts: away?.awayBttsPct ?? away?.bttsPct ?? null,
       H_fts: ftsHome(home),
       A_fts: ftsAway(away),
       H_o25: home?.homeOver25Pct ?? home?.over25Pct ?? null,
       A_o25: away?.awayOver25Pct ?? away?.over25Pct ?? null,
       H_mp: home?.homePlayed ?? home?.matchesPlayed ?? null,
       A_mp: away?.awayPlayed ?? away?.matchesPlayed ?? null,
-      M_btts: stats.preBttsPct ?? null,
       M_o25: stats.preOver25Pct ?? null,
       L_o25,
       L_avg,
       predictionRisk,
       suspendedMatches: num((stats.raw ?? {})['suspended_matches']),
-      oddsBttsYes: odds.oddsBttsYes ?? null,
-      oddsBttsNo: odds.oddsBttsNo ?? null,
       oddsOver25: odds.oddsOver25 ?? null,
       oddsUnder25: odds.oddsUnder25 ?? null,
       hasLeague, hasMatches, hasTeams,

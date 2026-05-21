@@ -18,22 +18,9 @@ export function missingCsvPenalty(inp: MatchInputs): number {
   return Math.min(p, 15);
 }
 
-export function confBtts(spread: number, inp: MatchInputs): number {
-  let c = 75 - spread * 60 - smallSamplePenalty(inp.H_mp, inp.A_mp) - missingCsvPenalty(inp);
-  if ((inp.suspendedMatches ?? 0) > 2) c -= 5;
-  if ((inp.predictionRisk ?? 0) > 70) c *= 0.9;
-  return Math.round(clamp(c, 15, 92));
-}
-
 export function confO25(spread: number, inp: MatchInputs): number {
   let c = 75 - spread * 55 - smallSamplePenalty(inp.H_mp, inp.A_mp) - missingCsvPenalty(inp);
   if ((inp.suspendedMatches ?? 0) > 2) c -= 5;
   if ((inp.predictionRisk ?? 0) > 70) c *= 0.9;
   return Math.round(clamp(c, 15, 92));
-}
-
-/** Conflict BTTS YES↑ & UNDER25↑ → −5 ambele. */
-export function conflictPenalty(pBtts: number, pO25: number): boolean {
-  const pUnder = 1 - pO25;
-  return pBtts >= 0.58 && pUnder >= 0.58;
 }
