@@ -9,7 +9,7 @@ import { CentoHeader } from '@/components/cento-v2/CentoHeader';
 import { CentoEmpty } from '@/components/cento-v2/CentoEmpty';
 import { PowerMatchCard } from '@/components/cento-v2/PowerMatchCard';
 import { useCentoData } from '@/lib/cento-v2/useCentoData';
-import { useSelectedDate } from '@/lib/cento-v2/useSelectedDate';
+import { useSelectedDate, toLocalISO } from '@/lib/cento-v2/useSelectedDate';
 import { cn } from '@/lib/utils';
 import type { PickGrade } from '@/lib/cento-v2/engine/types';
 
@@ -73,10 +73,10 @@ export default function CentoDashboard() {
                 <Calendar
                   mode="single"
                   selected={selectedDate ? new Date(selectedDate + 'T00:00:00') : undefined}
-                  onSelect={(d) => d && setSelectedDate(d.toISOString().slice(0, 10))}
+                  onSelect={(d) => d && setSelectedDate(toLocalISO(d))}
                   modifiers={dateModifiers}
                   modifiersClassNames={{ hasMatches: 'relative after:content-[""] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary' }}
-                  disabled={(d) => !dateSet.has(d.toISOString().slice(0, 10))}
+                  disabled={(d) => !dateSet.has(toLocalISO(d))}
                   className={cn('p-3 pointer-events-auto')}
                 />
               </PopoverContent>

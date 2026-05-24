@@ -3,6 +3,13 @@ import { useEffect, useState } from 'react';
 
 const LS_KEY = 'cento.selectedDate';
 
+export function toLocalISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function read(): string | null {
   try { return sessionStorage.getItem(LS_KEY); } catch { return null; }
 }
@@ -23,7 +30,7 @@ export function useSelectedDate(availableDates: string[]): [string | null, (d: s
       return;
     }
     if (!date || !availableDates.includes(date)) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toLocalISO(new Date());
       const next = availableDates.includes(today) ? today : availableDates[0];
       setDateState(next);
       write(next);

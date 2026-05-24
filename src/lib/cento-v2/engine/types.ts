@@ -77,4 +77,31 @@ export interface MatchInputs {
   hasLeague: boolean;
   hasMatches: boolean;
   hasTeams: boolean;
+  // --- Layer 2: synthetic xG inputs ---
+  H_att: number | null;     // goals scored per match (home split)
+  H_def: number | null;     // goals conceded per match (home split)
+  A_att: number | null;     // goals scored per match (away split)
+  A_def: number | null;     // goals conceded per match (away split)
+  L_avg_h: number | null;   // league average home goals per match
+  L_avg_a: number | null;   // league average away goals per match
+  // --- Layer 4: bracket ---
+  M_o15: number | null;     // pre-match over 1.5 %
+  M_o35: number | null;     // pre-match over 3.5 %
+  // --- Layer 5: half-time projection (derived from team's first-half % * GF/GA avg) ---
+  H_ht_att: number | null;
+  H_ht_def: number | null;
+  A_ht_att: number | null;
+  A_ht_def: number | null;
+  L_ht_share: number | null; // share of league goals scored in first half (0..1)
+  // --- Layer 6: defense ---
+  H_cs: number | null;       // clean sheet % (home split or overall)
+  A_cs: number | null;       // clean sheet % (away split or overall)
+  // --- Layer 7: late goals ratio (0..1) ---
+  late_ratio: number | null;
+  // --- Layer 8: context ---
+  home_ppg: number | null;
+  away_ppg: number | null;
+  H_pos: number | null;
+  A_pos: number | null;
+  total_clubs: number | null;
 }

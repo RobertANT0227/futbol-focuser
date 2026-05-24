@@ -1,5 +1,5 @@
 // CENTO-V2
-import type { MatchInputs } from './types';
+import type { MatchInputs, QualityBand } from './types';
 import { clamp } from './smoothing';
 
 export function smallSamplePenalty(H_mp: number | null, A_mp: number | null): number {
@@ -18,9 +18,42 @@ export function missingCsvPenalty(inp: MatchInputs): number {
   return Math.min(p, 15);
 }
 
-export function confO25(spread: number, inp: MatchInputs): number {
-  let c = 75 - spread * 55 - smallSamplePenalty(inp.H_mp, inp.A_mp) - missingCsvPenalty(inp);
-  if ((inp.suspendedMatches ?? 0) > 2) c -= 5;
-  if ((inp.predictionRisk ?? 0) > 70) c *= 0.9;
+export interface ConfContext {
+  spread: number;
+  pBlend: number;
+  pOdds: number | null;
+  bracketBonus: number;
+  quality: QualityBand;
+}
+
+export function confO25(ctx: ConfContext, inp: MatchInputs): number {
+  let c = 60;
+  c -= ctx.spread * 60;
+  c -= smallSamplePenalty(inp.H_mp, inp.A_mp);
+  c -= missingCsvPenalty(inp);
+
+  const risk = inp.predictionRisk ?? 0;
+  if (risk > 70) c -= 8;
+  else if (risk > 55) c -= 4;
+
+  if ((inp.suspendedMatches ?? 0) > 3) c -= 5;
+
+  // Signal agreement bonus
+  if (ctx.spread < 0.08) c += 10;
+  else if (ctx.spread < 0.12) c += 6;
+  else if (ctx.spread < 0.18) c += 3;
+
+  // Odds alignment bonus
+  if (ctx.pOdds != null) {
+    const diff = Math.abs(ctx.pOdds - ctx.pBlend);
+    if (diff < 0.07) c += 7;
+    else if (diff < 0.12) c += 4;
+  }
+
+  c += ctx.bracketBonus; // ±0..6
+
+  if (ctx.quality === 'Excellent') c += 4;
+  else if (ctx.quality === 'Limited') c -= 8;
+
   return Math.round(clamp(c, 15, 92));
 }

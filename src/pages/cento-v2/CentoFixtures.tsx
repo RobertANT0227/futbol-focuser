@@ -7,7 +7,7 @@ import { CentoHeader } from '@/components/cento-v2/CentoHeader';
 import { CentoEmpty } from '@/components/cento-v2/CentoEmpty';
 import { PickBadge } from '@/components/cento-v2/PickBadge';
 import { useCentoData } from '@/lib/cento-v2/useCentoData';
-import { useSelectedDate } from '@/lib/cento-v2/useSelectedDate';
+import { useSelectedDate, toLocalISO } from '@/lib/cento-v2/useSelectedDate';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -42,7 +42,7 @@ export default function CentoFixtures() {
     return [...list].sort((a, b) => b.analysis.topPick.confidence - a.analysis.topPick.confidence);
   }, [analyses, selectedDate]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = toLocalISO(new Date());
   const todayHasMatches = dateSet.has(today);
   const suggestion = !filtered.length && selectedDate ? nearest(selectedDate, availableDates) : null;
 
@@ -62,10 +62,10 @@ export default function CentoFixtures() {
               <Calendar
                 mode="single"
                 selected={selectedDate ? new Date(selectedDate + 'T00:00:00') : undefined}
-                onSelect={(d) => d && setSelectedDate(d.toISOString().slice(0, 10))}
+                onSelect={(d) => d && setSelectedDate(toLocalISO(d))}
                 modifiers={dateModifiers}
                 modifiersClassNames={{ hasMatches: 'relative after:content-[""] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:h-1 after:w-1 after:rounded-full after:bg-primary' }}
-                disabled={(d) => !dateSet.has(d.toISOString().slice(0, 10))}
+                disabled={(d) => !dateSet.has(toLocalISO(d))}
                 defaultMonth={selectedDate ? new Date(selectedDate + 'T00:00:00') : undefined}
                 className={cn('p-3 pointer-events-auto')}
               />
