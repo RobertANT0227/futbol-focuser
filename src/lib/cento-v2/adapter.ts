@@ -13,6 +13,8 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) && n !== -1 ? n : null;
 }
 
+function clamp01(v: number): number { return Math.max(0, Math.min(1, v)); }
+
 /** FootyStats has fts split keys in raw payload; pick them if present. */
 function ftsHome(t: TeamProfile | undefined): number | null {
   if (!t) return null;
@@ -80,7 +82,7 @@ export function buildAnalyses(ds: LeagueDataset): AnalysisRow[] {
     bucket('goals_min_21_to_30') + bucket('goals_min_31_to_40') + bucket('goals_min_41_to_50') * 0.5;
   const L_ht_share = timedTotal > 0 ? clamp01(firstHalfTotal / timedTotal) : null;
 
-  const total_clubs = num(lraw['number_of_clubs']) ?? ds.teams.length || null;
+  const total_clubs = num(lraw['number_of_clubs']) ?? (ds.teams.length || null);
 
   const upcoming = ds.matches.filter((m) => {
     const s = (m.stats ?? {}) as { played?: boolean; raw?: Record<string, unknown> };
