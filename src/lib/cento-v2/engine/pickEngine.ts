@@ -71,7 +71,13 @@ export function analyzeMatch(ctx: AnalyzeContext): PowerAnalysis {
   const o25 = calcO25(inputs);
 
   // 3) Confidence
-  const cO25 = confO25(o25.spread, inputs);
+  const cO25 = confO25({
+    spread: o25.spread,
+    pBlend: o25.pBlend,
+    pOdds: o25.pOdds,
+    bracketBonus: o25.bracketBonus,
+    quality: q.band,
+  }, inputs);
 
   // 4) Grade
   const o25Grade = gradeO25(o25.pO25, cO25);
