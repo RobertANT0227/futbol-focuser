@@ -1,5 +1,4 @@
 import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
 import type { TeamRatings, MatchInsight } from '@/lib/deepmatch/ratings';
 import type { ParsedTeamStats } from '@/lib/deepmatch/parser';
