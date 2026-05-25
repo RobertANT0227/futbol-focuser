@@ -163,8 +163,7 @@ function TeamBlock({
       const merged: ParsedTeamStats = { ...stats };
       Object.entries(parsed).forEach(([k, v]) => {
         if (v !== undefined && v !== null && (v as unknown as string) !== '') {
-          // @ts-expect-error dynamic
-          merged[k] = v;
+          (merged as Record<string, unknown>)[k] = v;
         }
       });
       setStats(merged);
