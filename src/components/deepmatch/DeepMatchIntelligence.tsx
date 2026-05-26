@@ -2,15 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ChevronDown, Sparkles, Loader2, Wand2 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import type { MatchData, TeamStats } from '@/lib/types';
 import { defaultMatch } from '@/components/MatchInputForm';
-import { parseTeamRaw, type ParsedTeamStats, type FormToken } from '@/lib/deepmatch/parser';
+import type { ParsedTeamStats, FormToken } from '@/lib/deepmatch/parser';
 import { computeRatings, generateInsights, predictionScore } from '@/lib/deepmatch/ratings';
 import { SynthesisPanel, InsightsList } from './SynthesisPanel';
 import { toast } from '@/hooks/use-toast';
@@ -42,10 +40,10 @@ interface CornerLineState {
 
 interface DMState {
   ctx: Context;
-  homeRaw: string;
-  awayRaw: string;
   homeStats: ParsedTeamStats;
   awayStats: ParsedTeamStats;
+  homePlaystyle: PlayStyle;
+  awayPlaystyle: PlayStyle;
   odds: {
     home: number; draw: number; away: number;
     over25: number; under25: number;
@@ -54,7 +52,7 @@ interface DMState {
   corners: CornerLineState[];
 }
 
-const STORAGE_KEY = 'deepmatch-intelligence-state-v1';
+const STORAGE_KEY = 'deepmatch-intelligence-state-v2';
 
 const defaultCtx: Context = {
   league: '', country: '', season: '', round: '', date: '', time: '',
@@ -64,10 +62,10 @@ const defaultCtx: Context = {
 function defaultState(): DMState {
   return {
     ctx: defaultCtx,
-    homeRaw: '',
-    awayRaw: '',
     homeStats: {},
     awayStats: {},
+    homePlaystyle: 'possession',
+    awayPlaystyle: 'possession',
     odds: { home: 2.0, draw: 3.3, away: 3.5, over25: 1.85, under25: 2.0, bttsYes: 1.8, bttsNo: 2.0 },
     corners: [
       { line: 10.5, over: 1.85, under: 2.0 },
@@ -89,34 +87,36 @@ const FORM_TOKENS: FormToken[] = ['W', 'D', 'L'];
 const PLAY_STYLES = ['possession', 'counter', 'pressing', 'low-block', 'bus-parking', 'high-press'] as const;
 type PlayStyle = typeof PLAY_STYLES[number];
 
-const NUM_FIELDS: Array<{ key: keyof ParsedTeamStats; label: string; step?: string }> = [
-  { key: 'matchesPlayed', label: 'Meciuri jucate', step: '1' },
-  { key: 'goalsScored', label: 'Goluri marcate/meci' },
-  { key: 'goalsConceded', label: 'Goluri primite/meci' },
-  { key: 'xG', label: 'xG/meci' },
-  { key: 'xGA', label: 'xGA/meci' },
+type Field = { key: keyof ParsedTeamStats; label: string; step?: string };
+
+/** Sinteză = totaluri din coloana „Sinteză" (overall stats). xG = xGA (xG Împotriva) per cerere user. */
+const SYNTH_FIELDS: Field[] = [
+  { key: 'matchesPlayed', label: 'Meciuri jucate (MJ)', step: '1' },
+  { key: 'goalsScored', label: 'Goluri marcate / meci' },
+  { key: 'goalsConceded', label: 'Goluri primite / meci' },
+  { key: 'xG', label: 'xG Sinteză (Împotriva)' },
+  { key: 'shots', label: 'Șuturi / meci' },
+  { key: 'shotsOnTarget', label: 'Șuturi pe poartă / meci' },
+  { key: 'possession', label: 'Posesie %' },
+  { key: 'dangerousAttacks', label: 'Atacuri periculoase / meci' },
+  { key: 'gkSaves', label: 'Salvări portar / meci' },
+  { key: 'cardsPerMatch', label: 'Cartonașe / meci' },
+  { key: 'fouls', label: 'Faulturi / meci' },
+  { key: 'cornersPerMatch', label: 'Cornere / meci' },
+];
+
+const HOME_FIELDS: Field[] = [
   { key: 'goalsScoredHome', label: 'Goluri marcate acasă' },
   { key: 'goalsConcededHome', label: 'Goluri primite acasă' },
+  { key: 'shotsOnTargetHome', label: 'Șuturi pe poartă acasă' },
+  { key: 'cornersPerMatchHome', label: 'Cornere acasă' },
+];
+
+const AWAY_FIELDS: Field[] = [
   { key: 'goalsScoredAway', label: 'Goluri marcate deplasare' },
   { key: 'goalsConcededAway', label: 'Goluri primite deplasare' },
-  { key: 'shots', label: 'Șuturi/meci' },
-  { key: 'shotsOnTarget', label: 'Șuturi pe poartă/meci' },
-  { key: 'shotsOnTargetHome', label: 'SOT acasă' },
-  { key: 'shotsOnTargetAway', label: 'SOT deplasare' },
-  { key: 'possession', label: 'Posesie %' },
-  { key: 'dangerousAttacks', label: 'Atacuri periculoase/meci' },
-  { key: 'gkSaves', label: 'Salvări portar/meci' },
-  { key: 'cardsPerMatch', label: 'Cartonașe/meci' },
-  { key: 'fouls', label: 'Faulturi/meci' },
-  { key: 'cornersPerMatch', label: 'Cornere/meci' },
-  { key: 'cornersPerMatchHome', label: 'Cornere acasă' },
+  { key: 'shotsOnTargetAway', label: 'Șuturi pe poartă deplasare' },
   { key: 'cornersPerMatchAway', label: 'Cornere deplasare' },
-  { key: 'bttsPct', label: 'BTTS %' },
-  { key: 'over25Pct', label: 'Over 2.5 %' },
-  { key: 'cleanSheetPct', label: 'Clean sheet %' },
-  { key: 'ppm', label: 'PPM' },
-  { key: 'leaguePosition', label: 'Loc clasament' },
-  { key: 'totalTeamsInLeague', label: 'Echipe în ligă' },
 ];
 
 function FormPills({ form, onChange }: { form: FormToken[]; onChange: (f: FormToken[]) => void }) {
@@ -146,37 +146,50 @@ function FormPills({ form, onChange }: { form: FormToken[]; onChange: (f: FormTo
   );
 }
 
-function TeamBlock({
-  title, icon, raw, setRaw, stats, setStats, side,
+function FieldGrid({
+  fields, stats, update,
 }: {
-  title: string; icon: string; raw: string; setRaw: (s: string) => void;
-  stats: ParsedTeamStats; setStats: (s: ParsedTeamStats) => void; side: 'home' | 'away';
+  fields: Field[];
+  stats: ParsedTeamStats;
+  update: <K extends keyof ParsedTeamStats>(key: K, v: ParsedTeamStats[K]) => void;
 }) {
-  const [parsing, setParsing] = useState(false);
-  const [openOverrides, setOpenOverrides] = useState(true);
-  const [playstyle, setPlaystyle] = useState<PlayStyle>('possession');
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+      {fields.map((f) => (
+        <div key={f.key}>
+          <Label className="text-[10px] text-muted-foreground">{f.label}</Label>
+          <Input
+            type="number"
+            step={f.step ?? '0.01'}
+            value={(stats[f.key] as number | undefined) ?? ''}
+            onChange={(e) =>
+              update(f.key, e.target.value === '' ? undefined : (+e.target.value as never))
+            }
+            className="bg-secondary border-border h-8 text-xs"
+            placeholder="—"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  const handleParse = () => {
-    setParsing(true);
-    setTimeout(() => {
-      const { stats: parsed, log } = parseTeamRaw(raw);
-      const merged: ParsedTeamStats = { ...stats };
-      Object.entries(parsed).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && (v as unknown as string) !== '') {
-          (merged as Record<string, unknown>)[k] = v;
-        }
-      });
-      setStats(merged);
-      setParsing(false);
-      toast({ title: `${icon} ${title}`, description: `${log.length} statistici detectate.` });
-    }, 250);
-  };
-
+function TeamBlock({
+  title, icon, side, stats, setStats, playstyle, setPlaystyle,
+}: {
+  title: string; icon: string; side: 'home' | 'away';
+  stats: ParsedTeamStats; setStats: (s: ParsedTeamStats) => void;
+  playstyle: PlayStyle; setPlaystyle: (p: PlayStyle) => void;
+}) {
   const update = <K extends keyof ParsedTeamStats>(key: K, v: ParsedTeamStats[K]) =>
     setStats({ ...stats, [key]: v });
 
+  const splitFields = side === 'home' ? HOME_FIELDS : AWAY_FIELDS;
+  const splitLabel = side === 'home' ? 'Acasă' : 'Deplasare';
+  const splitIcon = side === 'home' ? '🏠' : '✈️';
+
   return (
-    <div className="rounded-lg border border-border bg-card/40 p-4 space-y-3">
+    <div className="rounded-lg border border-border bg-card/40 p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wider">{icon} {title}</h3>
         <span className="text-[10px] font-mono text-muted-foreground">
@@ -184,86 +197,69 @@ function TeamBlock({
         </span>
       </div>
 
-      <div>
-        <Label className="text-xs text-muted-foreground">Nume echipă</Label>
-        <Input
-          value={stats.name ?? ''}
-          onChange={(e) => update('name', e.target.value)}
-          placeholder={side === 'home' ? 'Echipa Gazdă' : 'Echipa Oaspete'}
-          className="bg-secondary border-border"
-        />
-      </div>
-
-      <div>
-        <Label className="text-xs text-muted-foreground flex items-center gap-1">
-          📋 Paste raw stats (Sofascore / Footystats / Flashscore)
-        </Label>
-        <Textarea
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-          placeholder={`ex:\nGoluri marcate 1.8\nGoluri primite 1.1\nxG 1.65\nPosesie 56%\nȘuturi pe poartă 4.8\nCornere 5.4\nForma: W W D L W`}
-          className="bg-secondary border-border min-h-[110px] font-mono text-xs"
-        />
-        <div className="flex items-center gap-2 mt-2">
-          <Button size="sm" onClick={handleParse} disabled={!raw.trim() || parsing} className="gap-1.5">
-            {parsing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-            Parse intelligent
-          </Button>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground">Nume echipă</Label>
+          <Input
+            value={stats.name ?? ''}
+            onChange={(e) => update('name', e.target.value)}
+            placeholder={side === 'home' ? 'Echipa Gazdă' : 'Echipa Oaspete'}
+            className="bg-secondary border-border h-9"
+          />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Stil de joc</Label>
+          <Select value={playstyle} onValueChange={(v) => setPlaystyle(v as PlayStyle)}>
+            <SelectTrigger className="bg-secondary border-border h-9 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PLAY_STYLES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-[10px] text-muted-foreground">Loc clasament</Label>
+          <Input
+            type="number" step="1"
+            value={stats.leaguePosition ?? ''}
+            onChange={(e) => update('leaguePosition', e.target.value === '' ? undefined : +e.target.value)}
+            className="bg-secondary border-border h-8 text-xs" placeholder="—"
+          />
+        </div>
+        <div>
+          <Label className="text-[10px] text-muted-foreground">Echipe în ligă</Label>
+          <Input
+            type="number" step="1"
+            value={stats.totalTeamsInLeague ?? ''}
+            onChange={(e) => update('totalTeamsInLeague', e.target.value === '' ? undefined : +e.target.value)}
+            className="bg-secondary border-border h-8 text-xs" placeholder="—"
+          />
         </div>
       </div>
 
-      <Collapsible open={openOverrides} onOpenChange={setOpenOverrides}>
-        <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openOverrides ? '' : '-rotate-90'}`} />
-          Override manual ({NUM_FIELDS.length} câmpuri)
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-3 space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {NUM_FIELDS.map((f) => (
-              <div key={f.key}>
-                <Label className="text-[10px] text-muted-foreground">{f.label}</Label>
-                <Input
-                  type="number"
-                  step={f.step ?? '0.01'}
-                  value={(stats[f.key] as number | undefined) ?? ''}
-                  onChange={(e) =>
-                    update(f.key, e.target.value === '' ? undefined : (+e.target.value as never))
-                  }
-                  className="bg-secondary border-border h-8 text-xs"
-                  placeholder="—"
-                />
-              </div>
-            ))}
-          </div>
+      {/* Sinteză */}
+      <div className="rounded-md border border-border/60 bg-background/40 p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-primary">📊 Sinteză (total)</h4>
+          <span className="text-[10px] text-muted-foreground">xG = coloana „Împotriva"</span>
+        </div>
+        <FieldGrid fields={SYNTH_FIELDS} stats={stats} update={update} />
+        <div>
+          <Label className="text-xs text-muted-foreground">Formă ultimele 5 meciuri (general)</Label>
+          <FormPills form={stats.formLast5 ?? ['D','D','D','D','D']} onChange={(f) => update('formLast5', f)} />
+        </div>
+      </div>
 
-          <div>
-            <Label className="text-xs text-muted-foreground">Stil de joc</Label>
-            <Select value={playstyle} onValueChange={(v) => setPlaystyle(v as PlayStyle)}>
-              <SelectTrigger className="bg-secondary border-border h-9 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PLAY_STYLES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">Formă ultimele 5 (general)</Label>
-              <FormPills form={stats.formLast5 ?? ['D','D','D','D','D']} onChange={(f) => update('formLast5', f)} />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">
-                Formă ultimele 5 {side === 'home' ? 'ACASĂ' : 'DEPLASARE'}
-              </Label>
-              <FormPills form={stats.formHomeAway ?? ['D','D','D','D','D']} onChange={(f) => update('formHomeAway', f)} />
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      <input type="hidden" data-playstyle={playstyle} />
+      {/* Split (Acasă pentru gazdă / Deplasare pentru oaspete) */}
+      <div className="rounded-md border border-border/60 bg-background/40 p-3 space-y-3">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-accent">{splitIcon} {splitLabel}</h4>
+        <FieldGrid fields={splitFields} stats={stats} update={update} />
+        <div>
+          <Label className="text-xs text-muted-foreground">
+            Formă ultimele 5 meciuri {splitLabel.toUpperCase()}
+          </Label>
+          <FormPills form={stats.formHomeAway ?? ['D','D','D','D','D']} onChange={(f) => update('formHomeAway', f)} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -279,8 +275,10 @@ function mergeIntoMatchData(s: DMState, base: MatchData): MatchData {
     goalsConcededHome: parsed.goalsConcededHome ?? fallback.goalsConcededHome,
     goalsScoredAway: parsed.goalsScoredAway ?? fallback.goalsScoredAway,
     goalsConcededAway: parsed.goalsConcededAway ?? fallback.goalsConcededAway,
+    // User cere: xG-ul echipei = valoarea din coloana xG „Împotriva" (= xG-ul concedat al adversarului perspectivei).
+    // Stocăm valoarea introdusă ca xG ofensiv (compatibil engine), iar xGA = aceeași dacă nu e setată separat.
     xG: parsed.xG ?? fallback.xG,
-    xGA: parsed.xGA ?? fallback.xGA,
+    xGA: parsed.xG ?? fallback.xGA,
     shots: parsed.shots ?? fallback.shots,
     shotsOnTarget: parsed.shotsOnTarget ?? fallback.shotsOnTarget,
     shotsOnTargetHome: parsed.shotsOnTargetHome ?? fallback.shotsOnTargetHome,
@@ -413,17 +411,17 @@ export function DeepMatchIntelligence({ match, onChange }: Props) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <TeamBlock
                 title="Echipa Gazdă" icon="🏠" side="home"
-                raw={state.homeRaw}
-                setRaw={(v) => setState((s) => ({ ...s, homeRaw: v }))}
                 stats={state.homeStats}
                 setStats={(v) => setState((s) => ({ ...s, homeStats: v }))}
+                playstyle={state.homePlaystyle}
+                setPlaystyle={(p) => setState((s) => ({ ...s, homePlaystyle: p }))}
               />
               <TeamBlock
                 title="Echipa Oaspete" icon="✈️" side="away"
-                raw={state.awayRaw}
-                setRaw={(v) => setState((s) => ({ ...s, awayRaw: v }))}
                 stats={state.awayStats}
                 setStats={(v) => setState((s) => ({ ...s, awayStats: v }))}
+                playstyle={state.awayPlaystyle}
+                setPlaystyle={(p) => setState((s) => ({ ...s, awayPlaystyle: p }))}
               />
             </div>
 
