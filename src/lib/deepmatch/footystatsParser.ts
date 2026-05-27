@@ -18,7 +18,11 @@ export interface FootystatsExtract {
   matchesPlayedHome?: number;
   matchesPlayedAway?: number;
   ppmSint?: number;
-  // xG Împotriva (per user requirement = team's xG)
+  // xG (For) — secțiunea simplă "xG", NU "xG (Împotriva)"
+  xgForSint?: number;
+  xgForHome?: number;
+  xgForAway?: number;
+  // xG Împotriva (xGA) — păstrat intern
   xgAgainstSint?: number;
   xgAgainstHome?: number;
   xgAgainstAway?: number;
@@ -31,6 +35,8 @@ export interface FootystatsExtract {
   cornersForPerMatch?: number;
   // Cartonașe / Meci
   cardsPerMatch?: number;
+  // Salvări portar / Intervenții portar (per meci)
+  gkSavesPerMatch?: number;
   // League standings (extracted using team name)
   leaguePosition?: number;
   totalTeamsInLeague?: number;
