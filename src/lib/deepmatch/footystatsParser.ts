@@ -148,14 +148,36 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
     }
   }
 
-  // --- xG (Împotriva) ---
+  // --- xG (For) — secțiunea simplă "xG" (NU "xG (Împotriva)") ---
+  // Caută o etichetă "xG" pe propria linie, fără paranteza "(Împotriva)".
+  {
+    const xgRe = /(?:^|\n)\s*xG\s*(?:\n|$)/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = xgRe.exec(joined)) !== null) {
+      const start = mm.index + mm[0].length;
+      const block = joined.slice(start, start + 220);
+      // Skip dacă următoarele caractere indică "(Împotriva)"
+      if (/^\s*\(Împotriva\)/i.test(block)) continue;
+      const mSint = block.match(/Sinteză\s*([\d.,]+)/i);
+      const mAcasa = block.match(/Acasă\s*([\d.,]+)/i);
+      const mDepl = block.match(/Deplasare\s*([\d.,]+)/i);
+      if (mSint || mAcasa || mDepl) {
+        if (mSint) { out.xgForSint = num(mSint[1]); log(`✅ xG Sinteză: ${out.xgForSint}`); }
+        if (mAcasa) out.xgForHome = num(mAcasa[1]);
+        if (mDepl) out.xgForAway = num(mDepl[1]);
+        break;
+      }
+    }
+  }
+
+  // --- xG (Împotriva) — pentru xGA ---
   const xgAgIdx = joined.search(/xG\s*\(Împotriva\)/i);
   if (xgAgIdx >= 0) {
     const block = joined.slice(xgAgIdx, xgAgIdx + 250);
     const mSint = block.match(/Sinteză\s*([\d.,]+)/i);
     const mAcasa = block.match(/Acasă\s*([\d.,]+)/i);
     const mDepl = block.match(/Deplasare\s*([\d.,]+)/i);
-    if (mSint) { out.xgAgainstSint = num(mSint[1]); log(`✅ xG Împotriva Sinteză: ${out.xgAgainstSint}`); }
+    if (mSint) { out.xgAgainstSint = num(mSint[1]); }
     if (mAcasa) out.xgAgainstHome = num(mAcasa[1]);
     if (mDepl) out.xgAgainstAway = num(mDepl[1]);
   }
@@ -173,13 +195,24 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
   const foulsM = joined.match(/Faulturi\s+pe\s+Meci[^\d-]*([\d.,]+)/i);
   if (foulsM) { out.foulsPerMatch = num(foulsM[1]); log(`✅ Faulturi/meci: ${out.foulsPerMatch}`); }
 
-  // Cornere Pentru (the "for" team count): "Cornere / Meci\n5.03\nPentru4.13"
-  const cornersFor = joined.match(/Pentru\s*([\d.,]+)/i);
-  if (cornersFor) { out.cornersForPerMatch = num(cornersFor[1]); log(`✅ Cornere Pentru: ${out.cornersForPerMatch}`); }
+  // Cornere — prioritate: "Cornere ale echipei pe meci" (din Statistici Evidențiate),
+  // fallback: "Pentru X.XX" (din blocul "Cornere / Meci").
+  const cornersTeam = joined.match(/Cornere\s+ale\s+echipei\s+pe\s+meci[^\d-]*([\d.,]+)/i);
+  if (cornersTeam) {
+    out.cornersForPerMatch = num(cornersTeam[1]);
+    log(`✅ Cornere echipă/meci: ${out.cornersForPerMatch}`);
+  } else {
+    const cornersFor = joined.match(/Pentru\s*([\d.,]+)/i);
+    if (cornersFor) { out.cornersForPerMatch = num(cornersFor[1]); log(`✅ Cornere Pentru: ${out.cornersForPerMatch}`); }
+  }
 
   // Cartonașe / Meci: number appears just BEFORE the label
   const cardsRe = joined.match(/([\d.,]+)\s*Cartonașe\s*\/\s*Meci/i);
   if (cardsRe) { out.cardsPerMatch = num(cardsRe[1]); log(`✅ Cartonașe/meci: ${out.cardsPerMatch}`); }
+
+  // Salvări portar / Intervenții portar (per meci) — același lucru
+  const gkSaves = joined.match(/(?:Salv[ăa]ri|Interven[țt]ii)\s+portar(?:\s*\/?\s*[Mm]eci)?[^\d-]*([\d.,]+)/i);
+  if (gkSaves) { out.gkSavesPerMatch = num(gkSaves[1]); log(`✅ Salvări portar/meci: ${out.gkSavesPerMatch}`); }
 
   // --- LEAGUE STANDINGS ---
   if (teamName) {
