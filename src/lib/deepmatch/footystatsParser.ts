@@ -261,13 +261,16 @@ export function applyGeneral(p: FootystatsExtract, base: ParsedTeamStats): Parse
     goalsConceded: p.goalsConcededSint ?? base.goalsConceded,
     matchesPlayed: p.matchesPlayedSint ?? base.matchesPlayed,
     ppm: p.ppmSint ?? base.ppm,
-    // user rule: xG-ul echipei = xG Împotriva (Sinteză)
-    xG: p.xgAgainstSint ?? base.xG,
+    // user rule: xG-ul echipei = xG simplu (NU Împotriva). xGA = xG Împotriva.
+    xG: p.xgForSint ?? base.xG,
+    xGA: p.xgAgainstSint ?? base.xGA,
     possession: p.possession ?? base.possession,
     shots: p.shotsPerMatch ?? base.shots,
     shotsOnTarget: p.shotsOnTargetPerMatch ?? base.shotsOnTarget,
     fouls: p.foulsPerMatch ?? base.fouls,
     cardsPerMatch: p.cardsPerMatch ?? base.cardsPerMatch,
+    gkSaves: p.gkSavesPerMatch ?? base.gkSaves,
+    // cornere medii/meci → din Statistici Generale
     cornersPerMatch: p.cornersForPerMatch ?? base.cornersPerMatch,
     leaguePosition: p.leaguePosition ?? base.leaguePosition,
     totalTeamsInLeague: p.totalTeamsInLeague ?? base.totalTeamsInLeague,
@@ -281,6 +284,7 @@ export function applyHome(p: FootystatsExtract, base: ParsedTeamStats): ParsedTe
     formHomeAway: p.form5 ?? base.formHomeAway,
     goalsScoredHome: p.goalsScoredHome ?? base.goalsScoredHome,
     goalsConcededHome: p.goalsConcededHome ?? base.goalsConcededHome,
+    // cornere ACASĂ/meci → din secțiunea Acasă
     cornersPerMatchHome: p.cornersForPerMatch ?? base.cornersPerMatchHome,
     shotsOnTargetHome: p.shotsOnTargetPerMatch ?? base.shotsOnTargetHome,
   };
@@ -293,6 +297,7 @@ export function applyAway(p: FootystatsExtract, base: ParsedTeamStats): ParsedTe
     formHomeAway: p.form5 ?? base.formHomeAway,
     goalsScoredAway: p.goalsScoredAway ?? base.goalsScoredAway,
     goalsConcededAway: p.goalsConcededAway ?? base.goalsConcededAway,
+    // cornere DEPLASARE/meci → din secțiunea Deplasare
     cornersPerMatchAway: p.cornersForPerMatch ?? base.cornersPerMatchAway,
     shotsOnTargetAway: p.shotsOnTargetPerMatch ?? base.shotsOnTargetAway,
   };
