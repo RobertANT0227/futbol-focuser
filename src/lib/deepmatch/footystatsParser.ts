@@ -18,7 +18,11 @@ export interface FootystatsExtract {
   matchesPlayedHome?: number;
   matchesPlayedAway?: number;
   ppmSint?: number;
-  // xG Împotriva (per user requirement = team's xG)
+  // xG (For) — secțiunea simplă "xG", NU "xG (Împotriva)"
+  xgForSint?: number;
+  xgForHome?: number;
+  xgForAway?: number;
+  // xG Împotriva (xGA) — păstrat intern
   xgAgainstSint?: number;
   xgAgainstHome?: number;
   xgAgainstAway?: number;
@@ -31,6 +35,8 @@ export interface FootystatsExtract {
   cornersForPerMatch?: number;
   // Cartonașe / Meci
   cardsPerMatch?: number;
+  // Salvări portar / Intervenții portar (per meci)
+  gkSavesPerMatch?: number;
   // League standings (extracted using team name)
   leaguePosition?: number;
   totalTeamsInLeague?: number;
@@ -142,14 +148,36 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
     }
   }
 
-  // --- xG (Împotriva) ---
+  // --- xG (For) — secțiunea simplă "xG" (NU "xG (Împotriva)") ---
+  // Caută o etichetă "xG" pe propria linie, fără paranteza "(Împotriva)".
+  {
+    const xgRe = /(?:^|\n)\s*xG\s*(?:\n|$)/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = xgRe.exec(joined)) !== null) {
+      const start = mm.index + mm[0].length;
+      const block = joined.slice(start, start + 220);
+      // Skip dacă următoarele caractere indică "(Împotriva)"
+      if (/^\s*\(Împotriva\)/i.test(block)) continue;
+      const mSint = block.match(/Sinteză\s*([\d.,]+)/i);
+      const mAcasa = block.match(/Acasă\s*([\d.,]+)/i);
+      const mDepl = block.match(/Deplasare\s*([\d.,]+)/i);
+      if (mSint || mAcasa || mDepl) {
+        if (mSint) { out.xgForSint = num(mSint[1]); log(`✅ xG Sinteză: ${out.xgForSint}`); }
+        if (mAcasa) out.xgForHome = num(mAcasa[1]);
+        if (mDepl) out.xgForAway = num(mDepl[1]);
+        break;
+      }
+    }
+  }
+
+  // --- xG (Împotriva) — pentru xGA ---
   const xgAgIdx = joined.search(/xG\s*\(Împotriva\)/i);
   if (xgAgIdx >= 0) {
     const block = joined.slice(xgAgIdx, xgAgIdx + 250);
     const mSint = block.match(/Sinteză\s*([\d.,]+)/i);
     const mAcasa = block.match(/Acasă\s*([\d.,]+)/i);
     const mDepl = block.match(/Deplasare\s*([\d.,]+)/i);
-    if (mSint) { out.xgAgainstSint = num(mSint[1]); log(`✅ xG Împotriva Sinteză: ${out.xgAgainstSint}`); }
+    if (mSint) { out.xgAgainstSint = num(mSint[1]); }
     if (mAcasa) out.xgAgainstHome = num(mAcasa[1]);
     if (mDepl) out.xgAgainstAway = num(mDepl[1]);
   }
@@ -167,13 +195,24 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
   const foulsM = joined.match(/Faulturi\s+pe\s+Meci[^\d-]*([\d.,]+)/i);
   if (foulsM) { out.foulsPerMatch = num(foulsM[1]); log(`✅ Faulturi/meci: ${out.foulsPerMatch}`); }
 
-  // Cornere Pentru (the "for" team count): "Cornere / Meci\n5.03\nPentru4.13"
-  const cornersFor = joined.match(/Pentru\s*([\d.,]+)/i);
-  if (cornersFor) { out.cornersForPerMatch = num(cornersFor[1]); log(`✅ Cornere Pentru: ${out.cornersForPerMatch}`); }
+  // Cornere — prioritate: "Cornere ale echipei pe meci" (din Statistici Evidențiate),
+  // fallback: "Pentru X.XX" (din blocul "Cornere / Meci").
+  const cornersTeam = joined.match(/Cornere\s+ale\s+echipei\s+pe\s+meci[^\d-]*([\d.,]+)/i);
+  if (cornersTeam) {
+    out.cornersForPerMatch = num(cornersTeam[1]);
+    log(`✅ Cornere echipă/meci: ${out.cornersForPerMatch}`);
+  } else {
+    const cornersFor = joined.match(/Pentru\s*([\d.,]+)/i);
+    if (cornersFor) { out.cornersForPerMatch = num(cornersFor[1]); log(`✅ Cornere Pentru: ${out.cornersForPerMatch}`); }
+  }
 
   // Cartonașe / Meci: number appears just BEFORE the label
   const cardsRe = joined.match(/([\d.,]+)\s*Cartonașe\s*\/\s*Meci/i);
   if (cardsRe) { out.cardsPerMatch = num(cardsRe[1]); log(`✅ Cartonașe/meci: ${out.cardsPerMatch}`); }
+
+  // Salvări portar / Intervenții portar (per meci) — același lucru
+  const gkSaves = joined.match(/(?:Salv[ăa]ri|Interven[țt]ii)\s+portar(?:\s*\/?\s*[Mm]eci)?[^\d-]*([\d.,]+)/i);
+  if (gkSaves) { out.gkSavesPerMatch = num(gkSaves[1]); log(`✅ Salvări portar/meci: ${out.gkSavesPerMatch}`); }
 
   // --- LEAGUE STANDINGS ---
   if (teamName) {
@@ -222,13 +261,16 @@ export function applyGeneral(p: FootystatsExtract, base: ParsedTeamStats): Parse
     goalsConceded: p.goalsConcededSint ?? base.goalsConceded,
     matchesPlayed: p.matchesPlayedSint ?? base.matchesPlayed,
     ppm: p.ppmSint ?? base.ppm,
-    // user rule: xG-ul echipei = xG Împotriva (Sinteză)
-    xG: p.xgAgainstSint ?? base.xG,
+    // user rule: xG-ul echipei = xG simplu (NU Împotriva). xGA = xG Împotriva.
+    xG: p.xgForSint ?? base.xG,
+    xGA: p.xgAgainstSint ?? base.xGA,
     possession: p.possession ?? base.possession,
     shots: p.shotsPerMatch ?? base.shots,
     shotsOnTarget: p.shotsOnTargetPerMatch ?? base.shotsOnTarget,
     fouls: p.foulsPerMatch ?? base.fouls,
     cardsPerMatch: p.cardsPerMatch ?? base.cardsPerMatch,
+    gkSaves: p.gkSavesPerMatch ?? base.gkSaves,
+    // cornere medii/meci → din Statistici Generale
     cornersPerMatch: p.cornersForPerMatch ?? base.cornersPerMatch,
     leaguePosition: p.leaguePosition ?? base.leaguePosition,
     totalTeamsInLeague: p.totalTeamsInLeague ?? base.totalTeamsInLeague,
@@ -242,6 +284,7 @@ export function applyHome(p: FootystatsExtract, base: ParsedTeamStats): ParsedTe
     formHomeAway: p.form5 ?? base.formHomeAway,
     goalsScoredHome: p.goalsScoredHome ?? base.goalsScoredHome,
     goalsConcededHome: p.goalsConcededHome ?? base.goalsConcededHome,
+    // cornere ACASĂ/meci → din secțiunea Acasă
     cornersPerMatchHome: p.cornersForPerMatch ?? base.cornersPerMatchHome,
     shotsOnTargetHome: p.shotsOnTargetPerMatch ?? base.shotsOnTargetHome,
   };
@@ -254,6 +297,7 @@ export function applyAway(p: FootystatsExtract, base: ParsedTeamStats): ParsedTe
     formHomeAway: p.form5 ?? base.formHomeAway,
     goalsScoredAway: p.goalsScoredAway ?? base.goalsScoredAway,
     goalsConcededAway: p.goalsConcededAway ?? base.goalsConcededAway,
+    // cornere DEPLASARE/meci → din secțiunea Deplasare
     cornersPerMatchAway: p.cornersForPerMatch ?? base.cornersPerMatchAway,
     shotsOnTargetAway: p.shotsOnTargetPerMatch ?? base.shotsOnTargetAway,
   };
