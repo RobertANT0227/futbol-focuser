@@ -219,10 +219,9 @@ function mergeIntoMatchData(s: DMState, base: MatchData): MatchData {
     goalsConcededHome: parsed.goalsConcededHome ?? fallback.goalsConcededHome,
     goalsScoredAway: parsed.goalsScoredAway ?? fallback.goalsScoredAway,
     goalsConcededAway: parsed.goalsConcededAway ?? fallback.goalsConcededAway,
-    // User cere: xG-ul echipei = valoarea din coloana xG „Împotriva" (= xG-ul concedat al adversarului perspectivei).
-    // Stocăm valoarea introdusă ca xG ofensiv (compatibil engine), iar xGA = aceeași dacă nu e setată separat.
+    // xG = secțiunea simplă "xG" din FootyStats. xGA = "xG (Împotriva)".
     xG: parsed.xG ?? fallback.xG,
-    xGA: parsed.xG ?? fallback.xGA,
+    xGA: parsed.xGA ?? fallback.xGA,
     shots: parsed.shots ?? fallback.shots,
     shotsOnTarget: parsed.shotsOnTarget ?? fallback.shotsOnTarget,
     shotsOnTargetHome: parsed.shotsOnTargetHome ?? fallback.shotsOnTargetHome,
@@ -238,6 +237,7 @@ function mergeIntoMatchData(s: DMState, base: MatchData): MatchData {
     leaguePosition: parsed.leaguePosition ?? fallback.leaguePosition,
     totalTeamsInLeague: parsed.totalTeamsInLeague ?? fallback.totalTeamsInLeague,
     formLast5: parsed.formLast5 ?? fallback.formLast5,
+    // Regula utilizator: forma echipei gazdă = tab "Acasă"; forma echipei oaspete = tab "Deplasare".
     formHome: isHome ? (parsed.formHomeAway ?? fallback.formHome) : fallback.formHome,
     formAway: !isHome ? (parsed.formHomeAway ?? fallback.formAway) : fallback.formAway,
   });
