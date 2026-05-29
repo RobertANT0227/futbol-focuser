@@ -167,6 +167,8 @@ const STAT_MATCHERS: { pattern: string; key: string; exact?: boolean }[] = [
   { pattern: 'dangerous attacks', key: 'dangerous_attacks' },
   { pattern: 'parade portar', key: 'gk_saves' },
   { pattern: 'gk saves', key: 'gk_saves' },
+  { pattern: 'interventii portar', key: 'gk_saves' },
+  { pattern: 'salvari portar', key: 'gk_saves' },
   { pattern: 'pase cheie', key: 'key_passes' },
   { pattern: 'key passes', key: 'key_passes' },
   { pattern: 'shots', key: 'shots' },

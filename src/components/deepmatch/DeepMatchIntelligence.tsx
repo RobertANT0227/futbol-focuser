@@ -91,7 +91,6 @@ function applySofaComparison(
     corners: 'cornersPerMatch',
     fouls: 'fouls',
     yellow_cards: 'cardsPerMatch',
-    xg: 'xG',
     dangerous_attacks: 'dangerousAttacks',
     gk_saves: 'gkSaves',
     goals: 'goalsScored',
