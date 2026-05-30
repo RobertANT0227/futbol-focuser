@@ -126,34 +126,17 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
     }
   }
 
-  // --- MJ TABLE: "Sinteză 39 23 10 6 ... 2.03" ---
-  // Look for the first "Sinteză" followed by integers; the 4 ints are MJ V E Î, last decimal is PPM.
+  // --- PPM from the "Sinteză" stats block (first decimal that follows the label) ---
+  // MJ is NOT extracted here — values are glued together (e.g. "Sinteză4017149"). MJ comes from standings.
   for (let i = 0; i < lines.length; i++) {
-    if (!/^Sinteză\b/i.test(lines[i])) continue;
-    // Collect numeric tokens from the next ~12 lines (skip form letters)
+    if (!/^Sintez[ăa]\b/i.test(lines[i])) continue;
     const window = lines.slice(i, i + 14).join(' ');
-    const ints = window.match(/\b\d+\b/g)?.map(n => parseInt(n, 10)) ?? [];
     const decimals = window.match(/\b\d+[.,]\d+\b/g)?.map(n => parseFloat(n.replace(',', '.'))) ?? [];
-    if (ints.length >= 1) {
-      out.matchesPlayedSint = ints[0];
-      log(`✅ MJ Sinteză: ${ints[0]}`);
-    }
     if (decimals.length >= 1) {
       out.ppmSint = decimals[0];
       log(`✅ PPM Sinteză: ${decimals[0]}`);
     }
     break;
-  }
-  // MJ for Acasă / Deplasare rows
-  for (const label of ['Acasă', 'Deplasare'] as const) {
-    const idx = lines.findIndex(l => new RegExp(`^${label}\\b`, 'i').test(l));
-    if (idx < 0) continue;
-    const window = lines.slice(idx, idx + 14).join(' ');
-    const ints = window.match(/\b\d+\b/g)?.map(n => parseInt(n, 10)) ?? [];
-    if (ints.length >= 1) {
-      if (label === 'Acasă') out.matchesPlayedHome = ints[0];
-      else out.matchesPlayedAway = ints[0];
-    }
   }
 
   // --- xG (For) — header arată "xG (NumeEchipa)", NU "xG (Împotriva)" ---
