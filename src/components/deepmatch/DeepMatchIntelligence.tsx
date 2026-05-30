@@ -95,12 +95,25 @@ function applySofaComparison(
     gk_saves: 'gkSaves',
     goals: 'goalsScored',
   };
+  // Regula prioritate: FootyStats > Superbet pentru majoritatea câmpurilor.
+  // EXCEPȚIE: Superbet overrides pentru atacuri periculoase / salvări portar / cartonașe / faulturi
+  // (FootyStats nu oferă constant aceste valori).
+  const superbetOverrideFields = new Set<keyof ParsedTeamStats>([
+    'dangerousAttacks', 'gkSaves', 'cardsPerMatch', 'fouls',
+  ]);
   let fields = 0;
   Object.entries(p.stats).forEach(([key, pair]) => {
     const field = map[key];
     if (!field) return;
-    (home as Record<string, unknown>)[field] = pair.team1;
-    (away as Record<string, unknown>)[field] = pair.team2;
+    const h = home as Record<string, unknown>;
+    const a = away as Record<string, unknown>;
+    if (superbetOverrideFields.has(field)) {
+      h[field] = pair.team1;
+      a[field] = pair.team2;
+    } else {
+      if (h[field] === undefined || h[field] === null) h[field] = pair.team1;
+      if (a[field] === undefined || a[field] === null) a[field] = pair.team2;
+    }
     fields += 2;
   });
   return { home, away, fields, t1: p.team1, t2: p.team2 };
