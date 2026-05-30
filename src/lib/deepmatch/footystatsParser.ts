@@ -97,69 +97,58 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
   const finalIdx = joined.search(/Final\s*\(\s*Final\s*\)\s*Statistici/i);
   const scope = finalIdx >= 0 ? joined.slice(finalIdx, finalIdx + 1200) : joined;
 
-  const rowRe = /(Sinteză|Acasă|Deplasare)[\s\S]{0,80}?([\d.,]+)[^\d]{1,15}?([\d.,]+)[^\d]{1,15}?([\d.,]+)/gi;
-  let m: RegExpExecArray | null;
-  const seen = new Set<string>();
-  while ((m = rowRe.exec(scope)) !== null) {
-    const label = m[1].toLowerCase();
-    if (seen.has(label)) continue;
-    seen.add(label);
-    const gm = num(m[2]);
-    const gp = num(m[3]);
-    if (label.startsWith('sint')) {
-      if (gm !== undefined) { out.goalsScoredSint = gm; log(`✅ GM Sinteză: ${gm}`); }
-      if (gp !== undefined) { out.goalsConcededSint = gp; log(`✅ GP Sinteză: ${gp}`); }
-    } else if (label.startsWith('acas')) {
-      if (gm !== undefined) { out.goalsScoredHome = gm; log(`✅ GM Acasă: ${gm}`); }
-      if (gp !== undefined) { out.goalsConcededHome = gp; log(`✅ GP Acasă: ${gp}`); }
-    } else if (label.startsWith('depl')) {
-      if (gm !== undefined) { out.goalsScoredAway = gm; log(`✅ GM Deplasare: ${gm}`); }
-      if (gp !== undefined) { out.goalsConcededAway = gp; log(`✅ GP Deplasare: ${gp}`); }
+  // Real-world format glues values together, e.g.:
+  //   "GMGPMedieSinteză1.38\n/meci1.00\n/meci2.38\n/meciAcasă1.500.752.25Deplasare1.251.252.50"
+  // Strategy: locate each label, then pull the next 3 decimal numbers ( \d+\.\d{1,2} ) within ~80 chars.
+  const labels: Array<{ key: 'sint' | 'home' | 'away'; rx: RegExp }> = [
+    { key: 'sint', rx: /Sintez[ăa]/i },
+    { key: 'home', rx: /Acas[ăa]/i },
+    { key: 'away', rx: /Deplasare/i },
+  ];
+  for (const { key, rx } of labels) {
+    const lm = rx.exec(scope);
+    if (!lm) continue;
+    const start = lm.index + lm[0].length;
+    const win = scope.slice(start, start + 80);
+    const decs = win.match(/\d+\.\d{1,2}/g) ?? [];
+    if (decs.length < 2) continue;
+    const gm = parseFloat(decs[0]);
+    const gp = parseFloat(decs[1]);
+    if (key === 'sint') {
+      out.goalsScoredSint = gm; out.goalsConcededSint = gp;
+      log(`✅ GM/GP Sinteză: ${gm}/${gp}`);
+    } else if (key === 'home') {
+      out.goalsScoredHome = gm; out.goalsConcededHome = gp;
+      log(`✅ GM/GP Acasă: ${gm}/${gp}`);
+    } else {
+      out.goalsScoredAway = gm; out.goalsConcededAway = gp;
+      log(`✅ GM/GP Deplasare: ${gm}/${gp}`);
     }
   }
 
-  // --- MJ TABLE: "Sinteză 39 23 10 6 ... 2.03" ---
-  // Look for the first "Sinteză" followed by integers; the 4 ints are MJ V E Î, last decimal is PPM.
+  // --- PPM from the "Sinteză" stats block (first decimal that follows the label) ---
+  // MJ is NOT extracted here — values are glued together (e.g. "Sinteză4017149"). MJ comes from standings.
   for (let i = 0; i < lines.length; i++) {
-    if (!/^Sinteză\b/i.test(lines[i])) continue;
-    // Collect numeric tokens from the next ~12 lines (skip form letters)
+    if (!/^Sintez[ăa]\b/i.test(lines[i])) continue;
     const window = lines.slice(i, i + 14).join(' ');
-    const ints = window.match(/\b\d+\b/g)?.map(n => parseInt(n, 10)) ?? [];
     const decimals = window.match(/\b\d+[.,]\d+\b/g)?.map(n => parseFloat(n.replace(',', '.'))) ?? [];
-    if (ints.length >= 1) {
-      out.matchesPlayedSint = ints[0];
-      log(`✅ MJ Sinteză: ${ints[0]}`);
-    }
     if (decimals.length >= 1) {
       out.ppmSint = decimals[0];
       log(`✅ PPM Sinteză: ${decimals[0]}`);
     }
     break;
   }
-  // MJ for Acasă / Deplasare rows
-  for (const label of ['Acasă', 'Deplasare'] as const) {
-    const idx = lines.findIndex(l => new RegExp(`^${label}\\b`, 'i').test(l));
-    if (idx < 0) continue;
-    const window = lines.slice(idx, idx + 14).join(' ');
-    const ints = window.match(/\b\d+\b/g)?.map(n => parseInt(n, 10)) ?? [];
-    if (ints.length >= 1) {
-      if (label === 'Acasă') out.matchesPlayedHome = ints[0];
-      else out.matchesPlayedAway = ints[0];
-    }
-  }
 
-  // --- xG (For) — secțiunea simplă "xG" (NU "xG (Împotriva)") ---
-  // Caută o etichetă "xG" pe propria linie, fără paranteza "(Împotriva)".
+  // --- xG (For) — header arată "xG (NumeEchipa)", NU "xG (Împotriva)" ---
   {
-    const xgRe = /(?:^|\n)\s*xG\s*(?:\n|$)/g;
+    const xgRe = /xG\s*\(([^)]+)\)/gi;
     let mm: RegExpExecArray | null;
     while ((mm = xgRe.exec(joined)) !== null) {
+      if (/Împotriv[ăa]/i.test(mm[1])) continue; // skip xGA header
       const start = mm.index + mm[0].length;
-      const block = joined.slice(start, start + 220);
-      // Skip dacă următoarele caractere indică "(Împotriva)"
-      if (/^\s*\(Împotriva\)/i.test(block)) continue;
-      const mSint = block.match(/Sinteză\s*([\d.,]+)/i);
-      const mAcasa = block.match(/Acasă\s*([\d.,]+)/i);
+      const block = joined.slice(start, start + 250);
+      const mSint = block.match(/Sintez[ăa]\s*([\d.,]+)/i);
+      const mAcasa = block.match(/Acas[ăa]\s*([\d.,]+)/i);
       const mDepl = block.match(/Deplasare\s*([\d.,]+)/i);
       if (mSint || mAcasa || mDepl) {
         if (mSint) { out.xgForSint = num(mSint[1]); log(`✅ xG Sinteză: ${out.xgForSint}`); }
@@ -214,36 +203,83 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
   const gkSaves = joined.match(/(?:Salv[ăa]ri|Interven[țt]ii)\s+portar(?:\s*\/?\s*[Mm]eci)?[^\d-]*([\d.,]+)/i);
   if (gkSaves) { out.gkSavesPerMatch = num(gkSaves[1]); log(`✅ Salvări portar/meci: ${out.gkSavesPerMatch}`); }
 
-  // --- LEAGUE STANDINGS ---
+  // --- LEAGUE STANDINGS — extract leaguePosition, totalTeams, MJ from the standings table ---
+  // Format per row (each on its own line, blank lines in between):
+  //   "3"  ""  " FC Dinamo 1948 Bucuresti"  ""  "20"  ""  "55%"  ""  "30"  ...
   if (teamName) {
-    // Find rows of pattern: "<rank>\t<team>\t<MJ>\t..." across multi-line dumps.
-    // Strategy: find the line containing the team name, then walk back to find the rank (number 1-50).
     const cleanTeam = teamName.replace(/^(fc|cs|cfr|scs|sc|afc|afk|ssc|acs)\s+/i, '').trim();
     const teamPart = cleanTeam.split(/\s+/).slice(0, 2).join('\\s+');
     const teamRe = new RegExp(escapeReg(cleanTeam) + '|' + teamPart, 'i');
 
+    // Collect all standings rows: a standalone rank line followed (within 8 lines) by a team line.
+    const rankIdxs: number[] = [];
     for (let i = 0; i < lines.length; i++) {
-      if (!teamRe.test(lines[i])) continue;
-      // Walk back up to 5 lines looking for a standalone rank (1-30)
-      for (let j = Math.max(0, i - 5); j < i; j++) {
-        const rk = lines[j].match(/^(\d{1,2})$/);
-        if (rk) {
-          const r = parseInt(rk[1], 10);
-          if (r >= 1 && r <= 32) {
-            out.leaguePosition = r;
-            log(`✅ Loc clasament: ${r}`);
+      const rk = lines[i].match(/^(\d{1,2})$/);
+      if (!rk) continue;
+      const r = parseInt(rk[1], 10);
+      if (r < 1 || r > 40) continue;
+      // verify a team-name line follows within 6 lines (non-empty, has letters)
+      let hasTeam = false;
+      for (let j = i + 1; j < Math.min(lines.length, i + 7); j++) {
+        if (/[A-Za-zĂÎÂȘȚăîâșț]{3,}/.test(lines[j]) && !/^\d/.test(lines[j])) { hasTeam = true; break; }
+        if (lines[j].length > 0 && !/^\d{1,2}$/.test(lines[j])) break;
+      }
+      if (hasTeam) rankIdxs.push(i);
+    }
+
+    // Find OUR team's row
+    for (const idx of rankIdxs) {
+      // team line is within next 6 lines
+      let teamLineIdx = -1;
+      for (let j = idx + 1; j < Math.min(lines.length, idx + 7); j++) {
+        if (teamRe.test(lines[j])) { teamLineIdx = j; break; }
+      }
+      if (teamLineIdx < 0) continue;
+      out.leaguePosition = parseInt(lines[idx], 10);
+      log(`✅ Loc clasament: ${out.leaguePosition}`);
+      // MJ = first standalone integer after team line (skip blank lines)
+      for (let k = teamLineIdx + 1; k < Math.min(lines.length, teamLineIdx + 6); k++) {
+        const im = lines[k].match(/^(\d{1,3})$/);
+        if (im) {
+          const mj = parseInt(im[1], 10);
+          if (mj >= 1 && mj <= 80) {
+            // Heuristic: which tab? Use which standings header precedes this row.
+            const headerSlice = joined.slice(0, joined.indexOf(lines[idx]) >= 0 ? joined.indexOf(lines[idx]) : 0);
+            const lastHomeIdx = headerSlice.toLowerCase().lastIndexOf('clasament acas');
+            const lastAwayIdx = headerSlice.toLowerCase().lastIndexOf('clasament deplasare');
+            const lastGenIdx = Math.max(
+              headerSlice.toLowerCase().lastIndexOf('liga i tabel'),
+              headerSlice.toLowerCase().lastIndexOf('clasament'),
+            );
+            if (lastHomeIdx >= 0 && lastHomeIdx >= lastAwayIdx && lastHomeIdx >= lastGenIdx) {
+              out.matchesPlayedHome = mj;
+              log(`✅ MJ Acasă: ${mj}`);
+            } else if (lastAwayIdx >= 0 && lastAwayIdx >= lastGenIdx) {
+              out.matchesPlayedAway = mj;
+              log(`✅ MJ Deplasare: ${mj}`);
+            } else {
+              out.matchesPlayedSint = mj;
+              log(`✅ MJ Sinteză: ${mj}`);
+            }
             break;
           }
         }
       }
-      if (out.leaguePosition) break;
+      break;
     }
-    // Total teams = highest rank found across all lines
-    const allRanks = joined.match(/^\s*(\d{1,2})\s*$/gm)?.map(s => parseInt(s.trim(), 10)) ?? [];
-    const maxRank = allRanks.length ? Math.max(...allRanks) : 0;
-    if (maxRank >= 6 && maxRank <= 32) {
-      out.totalTeamsInLeague = maxRank;
-      log(`✅ Total echipe: ${maxRank}`);
+
+    // Total teams = number of rank rows in the most recent standings block
+    if (rankIdxs.length >= 6) {
+      // largest contiguous run by gap (rows within 12 lines of each other)
+      let bestRun = 1, curRun = 1;
+      for (let i = 1; i < rankIdxs.length; i++) {
+        if (rankIdxs[i] - rankIdxs[i - 1] <= 14) { curRun++; bestRun = Math.max(bestRun, curRun); }
+        else curRun = 1;
+      }
+      if (bestRun >= 6 && bestRun <= 32) {
+        out.totalTeamsInLeague = bestRun;
+        log(`✅ Total echipe: ${bestRun}`);
+      }
     }
   }
 
