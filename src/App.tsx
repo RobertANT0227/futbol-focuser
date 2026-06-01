@@ -12,10 +12,6 @@ import NotFound from "./pages/NotFound.tsx";
 import BankrollManager from "./pages/BankrollManager.tsx";
 import Auth from "./pages/Auth.tsx";
 import Settings from "./pages/Settings.tsx";
-import CentoDashboard from "./pages/cento-v2/CentoDashboard.tsx";
-import CentoFixtures from "./pages/cento-v2/CentoFixtures.tsx";
-import CentoAnalysis from "./pages/cento-v2/CentoAnalysis.tsx";
-import CentoDatabase from "./pages/cento-v2/CentoDatabase.tsx";
 
 const queryClient = new QueryClient();
 
@@ -84,46 +80,6 @@ const App = () => (
                 <ProtectedRoute requirePremium>
                   <ShellLayout>
                     <BankrollManager />
-                  </ShellLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/cento-power"
-              element={
-                <ProtectedRoute requirePremium>
-                  <ShellLayout>
-                    <CentoDashboard />
-                  </ShellLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/cento-power/fixtures"
-              element={
-                <ProtectedRoute requirePremium>
-                  <ShellLayout>
-                    <CentoFixtures />
-                  </ShellLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/cento-power/analysis"
-              element={
-                <ProtectedRoute requirePremium>
-                  <ShellLayout>
-                    <CentoAnalysis />
-                  </ShellLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/cento-power/database"
-              element={
-                <ProtectedRoute requirePremium>
-                  <ShellLayout>
-                    <CentoDatabase />
                   </ShellLayout>
                 </ProtectedRoute>
               }
