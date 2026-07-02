@@ -64,34 +64,29 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+            {/* AUTH TEMPORARILY DISABLED — free access. Rewrap with <ProtectedRoute> to re-enable. */}
             <Route
               path="/"
               element={
-                <ProtectedRoute>
-                  <ShellLayout>
-                    <Index />
-                  </ShellLayout>
-                </ProtectedRoute>
+                <ShellLayout>
+                  <Index />
+                </ShellLayout>
               }
             />
             <Route
               path="/bankroll"
               element={
-                <ProtectedRoute requirePremium>
-                  <ShellLayout>
-                    <BankrollManager />
-                  </ShellLayout>
-                </ProtectedRoute>
+                <ShellLayout>
+                  <BankrollManager />
+                </ShellLayout>
               }
             />
             <Route
               path="/settings"
               element={
-                <ProtectedRoute requireRole="owner">
-                  <ShellLayout>
-                    <Settings />
-                  </ShellLayout>
-                </ProtectedRoute>
+                <ShellLayout>
+                  <Settings />
+                </ShellLayout>
               }
             />
             <Route
