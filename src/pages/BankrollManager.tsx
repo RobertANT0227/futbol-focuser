@@ -436,14 +436,16 @@ const BankrollManager = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Rezultat</label>
-                  <Select value={result} onValueChange={v => setResult(v as 'WIN' | 'LOSS')}>
+                  <label className="text-xs text-muted-foreground mb-1 block">Status</label>
+                  <Select value={initialStatus} onValueChange={v => setInitialStatus(v as BetStatus)}>
                     <SelectTrigger className="bg-secondary border-border">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="WIN">✅ WIN</SelectItem>
-                      <SelectItem value="LOSS">❌ LOSS</SelectItem>
+                      <SelectItem value="PENDING">⏳ Pending</SelectItem>
+                      <SelectItem value="WON">✅ Won</SelectItem>
+                      <SelectItem value="LOST">❌ Lost</SelectItem>
+                      <SelectItem value="VOID">↩️ Void</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -460,6 +462,16 @@ const BankrollManager = () => {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Sport</label>
+                <Input
+                  value={sport}
+                  onChange={e => setSport(e.target.value)}
+                  placeholder="Fotbal"
+                  className="bg-secondary border-border"
+                />
               </div>
 
               {/* Stake preview — confidence-based fixed % */}
