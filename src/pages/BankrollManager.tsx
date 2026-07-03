@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,13 +63,21 @@ import {
   loadSyncedTopBets,
   clearSyncedTopBets,
   type SyncedTopBet,
+  type BetStatus,
+  setBetStatus,
+  deleteBet,
+  betStatus,
 } from '@/lib/bankroll';
 import { BetCard } from '@/components/BetCard';
 import type { BetRecommendation } from '@/lib/types';
 import { PickStakePlan } from '@/components/PickStakePlan';
+import { useAuth } from '@/contexts/AuthContext';
+import { syncAllBetsToCloud, deleteBetFromCloud } from '@/lib/bankrollSync';
+import { Trash2 } from 'lucide-react';
 
 const BankrollManager = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [state, setState] = useState<BankrollState>(() => {
     return loadBankrollState() || getDefaultBankrollState(1000);
   });
@@ -83,14 +91,23 @@ const BankrollManager = () => {
   const [risk, setRisk] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
   const [winRate, setWinRate] = useState('70');
   const [confidence, setConfidence] = useState<ConfidenceLevel>('MEDIUM');
+  const [sport, setSport] = useState('Fotbal');
+  const [initialStatus, setInitialStatus] = useState<BetStatus>('WON');
 
   // Top bets synced from analysis page
   const [syncedBets, setSyncedBets] = useState<SyncedTopBet[]>(() => loadSyncedTopBets());
 
-  const stats = getStats(state);
+  const stats = useMemo(() => getStats(state), [state]);
   const cashOut = getCashOutStatus(state);
-  const chartData = getBankrollChartData(state);
-  const monthlyData = getMonthlyProfitData(state);
+  const chartData = useMemo(() => getBankrollChartData(state), [state]);
+  const monthlyData = useMemo(() => getMonthlyProfitData(state), [state]);
+
+  // Sync bets to cloud reactively (fire-and-forget) so Owner Dashboard sees updates.
+  useEffect(() => {
+    if (user && state.bets.length > 0) {
+      syncAllBetsToCloud(user.id, state.bets);
+    }
+  }, [state.bets, user]);
 
   const handleSetup = () => {
     const val = parseFloat(initialInput);
@@ -107,11 +124,23 @@ const BankrollManager = () => {
     const o = parseFloat(odds);
     const wr = parseFloat(winRate);
     if (o <= 1 || wr <= 0 || wr > 100) return;
-    const newState = addBet(state, matchName, o, result, risk, wr, confidence);
+    const resultForCompat: 'WIN' | 'LOSS' = initialStatus === 'LOST' ? 'LOSS' : 'WIN';
+    const newState = addBet(state, matchName, o, resultForCompat, risk, wr, confidence, sport, initialStatus);
     setState(newState);
     setMatchName('');
     setOdds('');
     setWinRate('70');
+  };
+
+  const handleSetStatus = (id: string, st: BetStatus) => {
+    const next = setBetStatus(state, id, st);
+    setState(next);
+  };
+
+  const handleDeleteBet = (id: string) => {
+    const next = deleteBet(state, id);
+    setState(next);
+    deleteBetFromCloud(id);
   };
 
   const handlePrefillFromTopBet = (b: SyncedTopBet) => {
