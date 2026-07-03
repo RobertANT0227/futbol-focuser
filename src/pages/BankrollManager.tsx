@@ -556,24 +556,35 @@ const BankrollManager = () => {
         </div>
 
         {/* Dashboard stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          {[
-            { label: 'Total pariuri', value: stats.total },
-            { label: 'Câștigate', value: stats.wins, color: 'text-primary' },
-            { label: 'Pierdute', value: stats.losses, color: 'text-destructive' },
-            { label: 'Winrate', value: `${stats.winrate}%` },
-            { label: 'Cotă medie', value: stats.avgOdds },
-            { label: 'ROI', value: `${stats.roi}%`, color: stats.roi >= 0 ? 'text-primary' : 'text-destructive' },
-            { label: 'Yield', value: `${stats.yieldPct}%`, color: stats.yieldPct >= 0 ? 'text-primary' : 'text-destructive' },
-          ].map(s => (
-            <Card key={s.label} className="border-border">
-              <CardContent className="p-3 text-center">
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-                <p className={`text-lg font-bold font-mono ${s.color || 'text-foreground'}`}>{s.value}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-foreground">Statistici detaliate (live)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {[
+                { label: 'Total bilete', value: stats.total },
+                { label: 'Câștigate', value: stats.wins, color: 'text-primary' },
+                { label: 'Pierdute', value: stats.losses, color: 'text-destructive' },
+                { label: 'Void', value: stats.voids, color: 'text-muted-foreground' },
+                { label: 'Pending', value: stats.pending, color: 'text-accent' },
+                { label: 'Win Rate', value: `${stats.winrate}%` },
+                { label: 'Profit total', value: `${stats.totalProfit >= 0 ? '+' : ''}${stats.totalProfit.toFixed(2)}`, color: stats.totalProfit >= 0 ? 'text-primary' : 'text-destructive' },
+                { label: 'Profit net', value: `${stats.netProfit >= 0 ? '+' : ''}${stats.netProfit.toFixed(2)}`, color: stats.netProfit >= 0 ? 'text-primary' : 'text-destructive' },
+                { label: 'ROI', value: `${stats.roi}%`, color: stats.roi >= 0 ? 'text-primary' : 'text-destructive' },
+                { label: 'Yield', value: `${stats.yieldPct}%`, color: stats.yieldPct >= 0 ? 'text-primary' : 'text-destructive' },
+                { label: 'Stake total', value: stats.totalStaked.toFixed(2) },
+                { label: 'Cotă medie', value: stats.avgOdds },
+                { label: 'Profit / bilet', value: `${stats.avgProfitPerBet >= 0 ? '+' : ''}${stats.avgProfitPerBet.toFixed(2)}`, color: stats.avgProfitPerBet >= 0 ? 'text-primary' : 'text-destructive' },
+              ].map(s => (
+                <div key={s.label} className="rounded-md border border-border bg-card/50 p-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{s.label}</p>
+                  <p className={`text-lg font-bold font-mono ${s.color || 'text-foreground'}`}>{s.value}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Bet history */}
         <Card className="border-border">
@@ -594,9 +605,10 @@ const BankrollManager = () => {
                       <th className="text-right py-2 px-2">Cotă</th>
                       <th className="text-right py-2 px-2">Stake %</th>
                       <th className="text-right py-2 px-2">Stake</th>
-                      <th className="text-center py-2 px-2">Rezultat</th>
+                      <th className="text-center py-2 px-2">Status</th>
                       <th className="text-right py-2 px-2">Profit</th>
                       <th className="text-right py-2 px-2">Bancă</th>
+                      <th className="text-center py-2 px-2">Acțiuni</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -607,6 +619,7 @@ const BankrollManager = () => {
                           : bet.confidence === 'MEDIUM'
                           ? 'text-accent'
                           : 'text-destructive';
+                      const st = betStatus(bet);
                       return (
                         <tr key={bet.id} className="border-b border-border/50 hover:bg-muted/30">
                           <td className="py-2 px-2 text-muted-foreground font-mono text-xs">{state.bets.length - i}</td>
@@ -620,15 +633,32 @@ const BankrollManager = () => {
                           </td>
                           <td className="py-2 px-2 text-right font-mono">{bet.stake.toFixed(2)}</td>
                           <td className="py-2 px-2 text-center">
-                            {bet.result === 'WIN'
-                              ? <span className="text-primary font-semibold">✅ W</span>
-                              : <span className="text-destructive font-semibold">❌ L</span>
-                            }
+                            <Select value={st} onValueChange={(v) => handleSetStatus(bet.id, v as BetStatus)}>
+                              <SelectTrigger className="h-7 w-[110px] mx-auto bg-secondary border-border text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PENDING">⏳ Pending</SelectItem>
+                                <SelectItem value="WON">✅ Won</SelectItem>
+                                <SelectItem value="LOST">❌ Lost</SelectItem>
+                                <SelectItem value="VOID">↩️ Void</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </td>
                           <td className={`py-2 px-2 text-right font-mono font-semibold ${bet.profit >= 0 ? 'text-primary' : 'text-destructive'}`}>
                             {bet.profit >= 0 ? '+' : ''}{bet.profit.toFixed(2)}
                           </td>
                           <td className="py-2 px-2 text-right font-mono">{bet.bankrollAfter.toFixed(2)}</td>
+                          <td className="py-2 px-2 text-center">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteBet(bet.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })}
