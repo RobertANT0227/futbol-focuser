@@ -40,7 +40,6 @@ export function AppSidebar() {
 
   const items = allItems.filter((it) => {
     if (it.ownerOnly && !isOwner) return false;
-    if (it.premiumOnly && !isPremium) return false;
     return true;
   });
   const navItems = items.map((it, idx) => ({ ...it, key: `${it.url}-${it.hash ?? ''}-${idx}` }));
