@@ -110,7 +110,6 @@ export interface AnalysisResult {
   analysisSteps: AnalysisStep[];
   detectedStyles: { home: string; away: string };
   bestBet: BetRecommendation | null;
-  tipsterV10?: import('./tipsterV10').TipsterV10Report;
 }
 
 export interface AnalysisStep {

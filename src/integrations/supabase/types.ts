@@ -77,63 +77,6 @@ export type Database = {
         }
         Relationships: []
       }
-      bankroll_bets: {
-        Row: {
-          bankroll_after: number | null
-          confidence: string | null
-          created_at: string
-          id: string
-          match: string
-          odds: number
-          placed_at: string
-          profit: number
-          risk: string | null
-          settled_at: string | null
-          sport: string
-          stake: number
-          status: string
-          updated_at: string
-          user_id: string
-          win_rate: number | null
-        }
-        Insert: {
-          bankroll_after?: number | null
-          confidence?: string | null
-          created_at?: string
-          id?: string
-          match: string
-          odds: number
-          placed_at?: string
-          profit?: number
-          risk?: string | null
-          settled_at?: string | null
-          sport?: string
-          stake?: number
-          status?: string
-          updated_at?: string
-          user_id: string
-          win_rate?: number | null
-        }
-        Update: {
-          bankroll_after?: number | null
-          confidence?: string | null
-          created_at?: string
-          id?: string
-          match?: string
-          odds?: number
-          placed_at?: string
-          profit?: number
-          risk?: string | null
-          settled_at?: string | null
-          sport?: string
-          stake?: number
-          status?: string
-          updated_at?: string
-          user_id?: string
-          win_rate?: number | null
-        }
-        Relationships: []
-      }
       cp_imports: {
         Row: {
           created_at: string

@@ -12,7 +12,6 @@ import NotFound from "./pages/NotFound.tsx";
 import BankrollManager from "./pages/BankrollManager.tsx";
 import Auth from "./pages/Auth.tsx";
 import Settings from "./pages/Settings.tsx";
-import OwnerDashboard from "./pages/OwnerDashboard.tsx";
 
 const queryClient = new QueryClient();
 
@@ -91,16 +90,6 @@ const App = () => (
                 <ProtectedRoute requireRole="owner">
                   <ShellLayout>
                     <Settings />
-                  </ShellLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/owner"
-              element={
-                <ProtectedRoute requireRole="owner">
-                  <ShellLayout>
-                    <OwnerDashboard />
                   </ShellLayout>
                 </ProtectedRoute>
               }

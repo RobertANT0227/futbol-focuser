@@ -1,6 +1,5 @@
 import type { AnalysisResult } from '@/lib/types';
 import { BetCard } from './BetCard';
-import { TipsterV10Panel } from './TipsterV10Panel';
 
 function pct(n: number): string {
   return (n * 100).toFixed(1) + '%';
@@ -39,11 +38,6 @@ export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* TIPSTER PREMIUM V10 — verdict prioritar */}
-      {result.tipsterV10 && (
-        <TipsterV10Panel report={result.tipsterV10} matchLabel={matchLabel} />
-      )}
-
       {/* Summary header */}
       <div className="gradient-verdict rounded-xl p-6 border border-border">
         <h2 className="text-xl font-bold text-gradient-primary mb-4">📊 {matchLabel}</h2>

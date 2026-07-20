@@ -76,42 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.subscription.unsubscribe();
   }, []);
 
-  // Force logout when the current account is deleted by owner
-  useEffect(() => {
-    if (!user) return;
-    const uid = user.id;
-
-    const forceLogout = async () => {
-      await supabase.auth.signOut();
-      window.location.href = "/auth";
-    };
-
-    // Realtime: listen for our own profile being deleted
-    const channel = supabase
-      .channel(`profile-watch-${uid}`)
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "profiles", filter: `id=eq.${uid}` },
-        () => forceLogout(),
-      )
-      .subscribe();
-
-    // Fallback: verify user still exists on focus / interval
-    const check = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error || !data?.user) forceLogout();
-    };
-    const onFocus = () => check();
-    window.addEventListener("focus", onFocus);
-    const iv = window.setInterval(check, 30000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      window.removeEventListener("focus", onFocus);
-      window.clearInterval(iv);
-    };
-  }, [user?.id]);
-
   const signOut = async () => {
     await supabase.auth.signOut();
   };

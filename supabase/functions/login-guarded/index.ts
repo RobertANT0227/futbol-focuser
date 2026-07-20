@@ -64,13 +64,13 @@ Deno.serve(async (req) => {
       if (meta?.blocked) {
         return new Response(
           JSON.stringify({ ok: false, error: "blocked", message: meta.blocked_reason || "Cont blocat de administrator." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       if (meta?.expires_at && new Date(meta.expires_at).getTime() <= Date.now()) {
         return new Response(
           JSON.stringify({ ok: false, error: "expired", message: "Contul a expirat. Contactează administratorul." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
             error: "locked",
             message: `Cont blocat. Reîncearcă după ${unlocksAt.toLocaleTimeString("ro-RO")}.`,
           }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
       await admin.from("login_attempts").insert({ username, success: false });
       return new Response(
         JSON.stringify({ ok: false, error: "invalid_credentials", message: "Username sau parolă incorectă." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
