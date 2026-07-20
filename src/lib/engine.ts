@@ -11,6 +11,7 @@ import type {
   BetRecommendation, AnalysisResult, MonteCarloResult, AnalysisStep,
 } from './types';
 import { loadBankrollState } from './bankroll';
+import { runTipsterV10 } from './tipsterV10';
 
 // ============= CONSTANTE (baseline ligă european mediu) =============
 const LB_GOALS = 1.35;       // GF/echipă/meci
@@ -492,7 +493,7 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
   // Best bet = top score ≥ 60 cu edge pozitiv
   const bestBet = filtered.find(r => r.winRate >= 60 && r.value > 0) || null;
 
-  return {
+  const partial: AnalysisResult = {
     homeXG: lamHome,
     awayXG: lamAway,
     poissonMatrix: poissonMatrixFromMC(mc),
@@ -521,4 +522,6 @@ export function runAnalysis(match: MatchData, plan?: UserPlan): AnalysisResult {
     detectedStyles: { home: match.homeTeam.playStyle, away: match.awayTeam.playStyle },
     bestBet,
   };
+  partial.tipsterV10 = runTipsterV10(match, partial);
+  return partial;
 }
