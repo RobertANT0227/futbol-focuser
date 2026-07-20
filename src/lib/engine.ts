@@ -11,6 +11,7 @@ import type {
   BetRecommendation, AnalysisResult, MonteCarloResult, AnalysisStep,
 } from './types';
 import { loadBankrollState } from './bankroll';
+import { runTipsterV10 } from './tipsterV10';
 
 // ============= CONSTANTE (baseline ligă european mediu) =============
 const LB_GOALS = 1.35;       // GF/echipă/meci
