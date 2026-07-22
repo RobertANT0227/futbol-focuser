@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.deepmatch-vision]
 verify_jwt = false
+
+[functions.deepmatch-footystats-vision]
+verify_jwt = false
