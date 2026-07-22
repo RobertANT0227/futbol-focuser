@@ -345,7 +345,7 @@ export function DeepMatchIntelligence({ match, onChange }: Props) {
     ];
     for (const k of keys) {
       const v = patch[k as string];
-      if (v !== null && v !== undefined && v !== '') {
+      if (v !== null && v !== undefined) {
         (out as Record<string, unknown>)[k] = v;
       }
     }
