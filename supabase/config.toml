@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.admin-update-user]
 verify_jwt = false
+
+[functions.deepmatch-vision]
+verify_jwt = false
