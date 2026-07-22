@@ -120,6 +120,135 @@ function applySofaComparison(
   return { home, away, fields, t1: p.team1, t2: p.team2 };
 }
 
+function FsVisionBox({
+  mode, side, stats, setStats,
+}: {
+  mode: 'general' | 'home' | 'away';
+  side: 'home' | 'away';
+  stats: ParsedTeamStats;
+  setStats: (s: ParsedTeamStats) => void;
+}) {
+  const [shots, setShots] = useState<Array<{ name: string; data: string; mimeType: string; preview: string }>>([]);
+  const [busy, setBusy] = useState(false);
+
+  const addFiles = async (files: FileList | null) => {
+    if (!files) return;
+    const added: typeof shots = [];
+    for (const f of Array.from(files)) {
+      if (!f.type.startsWith('image/')) continue;
+      const buf = await f.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = ''; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const b64 = btoa(bin);
+      added.push({ name: f.name, data: b64, mimeType: f.type, preview: `data:${f.type};base64,${b64}` });
+    }
+    setShots((p) => [...p, ...added]);
+  };
+
+  const analyze = async () => {
+    if (!shots.length) return;
+    setBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('deepmatch-footystats-vision', {
+        body: {
+          images: shots.map((s) => ({ data: s.data, mimeType: s.mimeType })),
+          mode,
+          teamName: stats.name,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.error || 'vision_failed');
+      const r = data.result as {
+        form: ('W' | 'D' | 'L')[] | null;
+        goalsScored: number | null;
+        goalsConceded: number | null;
+        shotsOnTarget: number | null;
+      };
+      const out = { ...stats };
+      const missing: string[] = [];
+      const set: string[] = [];
+
+      if (mode === 'general') {
+        if (r.form) { out.formLast5 = r.form; set.push(`formă generală: ${r.form.join('/')}`); }
+        else missing.push('formă generală');
+      } else if (mode === 'home') {
+        if (r.form) { out.formHomeAway = r.form; set.push(`formă acasă: ${r.form.join('/')}`); }
+        else missing.push('formă acasă');
+        if (r.goalsScored != null) { out.goalsScoredHome = r.goalsScored; set.push(`GM acasă: ${r.goalsScored}`); }
+        else missing.push('GM acasă');
+        if (r.goalsConceded != null) { out.goalsConcededHome = r.goalsConceded; set.push(`GP acasă: ${r.goalsConceded}`); }
+        else missing.push('GP acasă');
+        if (r.shotsOnTarget != null) { out.shotsOnTargetHome = r.shotsOnTarget; set.push(`SOT acasă: ${r.shotsOnTarget}`); }
+        else missing.push('SOT acasă');
+      } else {
+        if (r.form) { out.formHomeAway = r.form; set.push(`formă deplasare: ${r.form.join('/')}`); }
+        else missing.push('formă deplasare');
+        if (r.goalsScored != null) { out.goalsScoredAway = r.goalsScored; set.push(`GM deplasare: ${r.goalsScored}`); }
+        else missing.push('GM deplasare');
+        if (r.goalsConceded != null) { out.goalsConcededAway = r.goalsConceded; set.push(`GP deplasare: ${r.goalsConceded}`); }
+        else missing.push('GP deplasare');
+        if (r.shotsOnTarget != null) { out.shotsOnTargetAway = r.shotsOnTarget; set.push(`SOT deplasare: ${r.shotsOnTarget}`); }
+        else missing.push('SOT deplasare');
+      }
+
+      setStats(out);
+      toast({
+        title: `📸 FootyStats ${mode === 'general' ? 'General' : mode === 'home' ? 'Acasă' : 'Deplasare'}`,
+        description: set.length
+          ? `✅ ${set.join(', ')}${missing.length ? ` • DATE LIPSĂ: ${missing.join(', ')}` : ''}`
+          : `DATE LIPSĂ: ${missing.join(', ')}`,
+        variant: set.length ? 'default' : 'destructive',
+      });
+    } catch (e) {
+      toast({ title: 'Eroare vision', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-accent/30 bg-accent/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wider text-accent font-semibold flex items-center gap-1.5">
+          <ImageIcon className="h-3 w-3" /> Screenshot Reader ({side === 'home' ? 'echipa gazdă' : 'echipa oaspete'} • {mode})
+        </span>
+        <span className="text-[9px] text-muted-foreground">valorile lipsă → DATE LIPSĂ</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary hover:bg-secondary/80 px-2.5 py-1 text-[11px] cursor-pointer">
+          <Upload className="h-3 w-3" /> Adaugă imagini
+          <input type="file" accept="image/*" multiple className="hidden"
+            onChange={(e) => { void addFiles(e.target.files); e.currentTarget.value = ''; }} />
+        </label>
+        <Button size="sm" onClick={analyze} disabled={!shots.length || busy} className="h-7 gap-1 text-[11px]">
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+          {busy ? 'Analizez…' : `Analizează (${shots.length})`}
+        </Button>
+        {shots.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setShots([])} className="h-7 text-[11px] text-muted-foreground">
+            Golește
+          </Button>
+        )}
+      </div>
+      {shots.length > 0 && (
+        <div className="grid grid-cols-4 md:grid-cols-6 gap-1.5">
+          {shots.map((s, i) => (
+            <div key={i} className="relative group rounded overflow-hidden border border-border bg-secondary">
+              <img src={s.preview} alt={s.name} className="w-full h-14 object-cover" />
+              <button
+                onClick={() => setShots((p) => p.filter((_, idx) => idx !== i))}
+                className="absolute top-0.5 right-0.5 rounded-full bg-background/80 p-0.5 opacity-0 group-hover:opacity-100 transition"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PasteBox({
   label, value, onChange, onExtract, hint,
 }: {
@@ -193,28 +322,37 @@ function TeamPasteBlock({
         </TabsList>
 
         <TabsContent value="general" className="mt-3">
+          <div className="space-y-3">
+          <FsVisionBox mode="general" side={side} stats={stats} setStats={setStats} />
           <PasteBox
             label="Lipește aici tot textul de la FootyStats → Statistici Generale (Formă, MJ, GM/GP Sinteză, xG Împotriva, Alte Statistici, Clasament Liga I Tabel)"
             hint="Se extrage: formă generală, loc clasament, MJ Sinteză, GM/GP Sinteză, xG (Împotriva) Sinteză, posesie, șuturi, cornere, faulturi, cartonașe."
             value={generalRaw} onChange={setGeneralRaw}
             onExtract={() => extract('general', generalRaw)}
           />
+          </div>
         </TabsContent>
         <TabsContent value="home" className="mt-3">
+          <div className="space-y-3">
+          <FsVisionBox mode="home" side={side} stats={stats} setStats={setStats} />
           <PasteBox
             label="Lipește aici FootyStats → Statistici Acasă (Formă acasă, GM/GP Acasă, Cornere Pentru acasă, Liga I Clasament Acasă)"
             hint="Se extrage: formă ACASĂ, GM/GP acasă, cornere pentru acasă, șuturi pe poartă acasă."
             value={acasaRaw} onChange={setAcasaRaw}
             onExtract={() => extract('home', acasaRaw)}
           />
+          </div>
         </TabsContent>
         <TabsContent value="away" className="mt-3">
+          <div className="space-y-3">
+          <FsVisionBox mode="away" side={side} stats={stats} setStats={setStats} />
           <PasteBox
             label="Lipește aici FootyStats → Statistici Deplasare (Formă deplasare, GM/GP Deplasare, Cornere Pentru deplasare, Liga I Clasament deplasare)"
             hint="Se extrage: formă DEPLASARE, GM/GP deplasare, cornere pentru deplasare, șuturi pe poartă deplasare."
             value={deplasareRaw} onChange={setDeplasareRaw}
             onExtract={() => extract('away', deplasareRaw)}
           />
+          </div>
         </TabsContent>
       </Tabs>
     </div>
