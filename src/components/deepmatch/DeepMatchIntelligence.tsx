@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Sparkles, Wand2 } from 'lucide-react';
+import { Sparkles, Wand2, Upload, Loader2, X, ImageIcon } from 'lucide-react';
 import type { MatchData, TeamStats } from '@/lib/types';
 import { defaultMatch } from '@/components/MatchInputForm';
 import type { ParsedTeamStats } from '@/lib/deepmatch/parser';
@@ -15,6 +15,7 @@ import { parseFootystatsRaw, applyGeneral, applyHome, applyAway } from '@/lib/de
 import { parseStatsOnly } from '@/lib/statsParser';
 import { SynthesisPanel, InsightsList } from './SynthesisPanel';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Props {
   match: MatchData;
@@ -268,6 +269,9 @@ function mergeIntoMatchData(s: DMState, base: MatchData): MatchData {
 export function DeepMatchIntelligence({ match, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<DMState>(() => loadState());
+  const [shots, setShots] = useState<Array<{ name: string; data: string; mimeType: string; preview: string }>>([]);
+  const [visionBusy, setVisionBusy] = useState(false);
+  const [visionNotes, setVisionNotes] = useState<string[]>([]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
@@ -308,6 +312,85 @@ export function DeepMatchIntelligence({ match, onChange }: Props) {
     setState(defaultState());
   };
 
+  const handleShotFiles = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    const added: typeof shots = [];
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue;
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      const b64 = btoa(bin);
+      added.push({
+        name: file.name,
+        data: b64,
+        mimeType: file.type,
+        preview: `data:${file.type};base64,${b64}`,
+      });
+    }
+    setShots((prev) => [...prev, ...added]);
+  };
+
+  const removeShot = (idx: number) =>
+    setShots((prev) => prev.filter((_, i) => i !== idx));
+
+  const mergeVisionTeam = (base: ParsedTeamStats, patch: Record<string, number | null | undefined>): ParsedTeamStats => {
+    const out = { ...base };
+    const keys: (keyof ParsedTeamStats)[] = [
+      'name', 'leaguePosition', 'matchesPlayed', 'totalTeamsInLeague',
+      'goalsScored', 'possession', 'shots', 'shotsOnTarget',
+      'cornersPerMatch', 'fouls', 'cardsPerMatch',
+      'dangerousAttacks', 'gkSaves',
+    ];
+    for (const k of keys) {
+      const v = patch[k as string];
+      if (v !== null && v !== undefined) {
+        (out as Record<string, unknown>)[k] = v;
+      }
+    }
+    return out;
+  };
+
+  const handleAnalyzeShots = async () => {
+    if (!shots.length) return;
+    setVisionBusy(true);
+    setVisionNotes([]);
+    try {
+      const { data, error } = await supabase.functions.invoke('deepmatch-vision', {
+        body: {
+          images: shots.map((s) => ({ data: s.data, mimeType: s.mimeType })),
+          homeName: state.homeStats.name,
+          awayName: state.awayStats.name,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.ok) throw new Error(data?.error || 'vision_failed');
+      const result = data.result as {
+        home: Record<string, number | null>;
+        away: Record<string, number | null>;
+        notes: string[];
+      };
+      setState((s) => ({
+        ...s,
+        homeStats: mergeVisionTeam(s.homeStats, result.home),
+        awayStats: mergeVisionTeam(s.awayStats, result.away),
+      }));
+      setVisionNotes(result.notes ?? []);
+      const filled = Object.values(result.home).filter((v) => v !== null && v !== undefined).length
+        + Object.values(result.away).filter((v) => v !== null && v !== undefined).length;
+      toast({
+        title: '🤖 Screenshoturi analizate',
+        description: `${filled} câmpuri completate din ${shots.length} imagine(i).`,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: 'Eroare analiză vision', description: msg, variant: 'destructive' });
+    } finally {
+      setVisionBusy(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -326,6 +409,73 @@ export function DeepMatchIntelligence({ match, onChange }: Props) {
 
         <TooltipProvider>
           <div className="space-y-5 pt-2">
+            {/* 0. Vision: Superbet screenshots */}
+            <div className="rounded-lg border border-accent/40 bg-accent/5 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4 text-accent" />
+                  Superbet Screenshot Reader (AI Vision)
+                </h3>
+                <span className="text-[10px] text-muted-foreground">Multi-imagine • auto-merge</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Încarcă screenshoturi din Superbet: Clasament, Top Statistici, Atac, Apărare. AI-ul detectează
+                automat tipul fiecărei imagini și completează câmpurile ambelor echipe. Intervenții portar =
+                Salvări portar. Valorile lipsă rămân goale (nu se inventează).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary hover:bg-secondary/80 px-3 py-1.5 text-xs cursor-pointer">
+                  <Upload className="h-3.5 w-3.5" />
+                  Adaugă screenshoturi
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => { void handleShotFiles(e.target.files); e.currentTarget.value = ''; }}
+                  />
+                </label>
+                <Button
+                  size="sm"
+                  onClick={handleAnalyzeShots}
+                  disabled={!shots.length || visionBusy}
+                  className="gap-1.5"
+                >
+                  {visionBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  {visionBusy ? 'Analizez…' : `Analizează (${shots.length})`}
+                </Button>
+                {shots.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setShots([])} className="text-muted-foreground">
+                    Golește
+                  </Button>
+                )}
+              </div>
+              {shots.length > 0 && (
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                  {shots.map((s, i) => (
+                    <div key={i} className="relative group rounded-md overflow-hidden border border-border bg-secondary">
+                      <img src={s.preview} alt={s.name} className="w-full h-20 object-cover" />
+                      <button
+                        onClick={() => removeShot(i)}
+                        className="absolute top-1 right-1 rounded-full bg-background/80 p-0.5 opacity-0 group-hover:opacity-100 transition"
+                        aria-label="Elimină"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <div className="absolute bottom-0 inset-x-0 bg-background/80 text-[9px] px-1 py-0.5 truncate">
+                        {s.name}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {visionNotes.length > 0 && (
+                <ul className="text-[10px] text-muted-foreground space-y-0.5 border-t border-border/50 pt-2">
+                  {visionNotes.map((n, i) => <li key={i}>• {n}</li>)}
+                </ul>
+              )}
+            </div>
+
             {/* 1. Sinteză comparativă (SofaScore) */}
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
