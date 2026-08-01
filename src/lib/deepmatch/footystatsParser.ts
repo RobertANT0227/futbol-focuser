@@ -106,14 +106,25 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
     { key: 'away', rx: /Deplasare/i },
   ];
   for (const { key, rx } of labels) {
-    const lm = rx.exec(scope);
-    if (!lm) continue;
-    const start = lm.index + lm[0].length;
-    const win = scope.slice(start, start + 80);
-    const decs = win.match(/\d+\.\d{1,2}/g) ?? [];
-    if (decs.length < 2) continue;
-    const gm = parseFloat(decs[0]);
-    const gp = parseFloat(decs[1]);
+    // caută toate aparițiile etichetei; ia prima care are 2+ zecimale după ea
+    const gx = new RegExp(rx.source, 'gi');
+    let gm: number | undefined;
+    let gp: number | undefined;
+    let lm: RegExpExecArray | null;
+    while ((lm = gx.exec(scope)) !== null) {
+      const start = lm.index + lm[0].length;
+      const win = scope.slice(start, start + 90);
+      // acceptă și virgulă ca separator zecimal (1,38 / 1.38), inclusiv lipite
+      const decs = win.match(/\d+[.,]\d{1,2}/g) ?? [];
+      if (decs.length < 2) continue;
+      const a = parseFloat(decs[0].replace(',', '.'));
+      const b = parseFloat(decs[1].replace(',', '.'));
+      if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+      if (a > 8 || b > 8) continue; // nu sunt medii de goluri
+      gm = a; gp = b;
+      break;
+    }
+    if (gm === undefined || gp === undefined) continue;
     if (key === 'sint') {
       out.goalsScoredSint = gm; out.goalsConcededSint = gp;
       log(`✅ GM/GP Sinteză: ${gm}/${gp}`);
@@ -127,7 +138,6 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
   }
 
   // --- PPM from the "Sinteză" stats block (first decimal that follows the label) ---
-  // MJ is NOT extracted here — values are glued together (e.g. "Sinteză4017149"). MJ comes from standings.
   for (let i = 0; i < lines.length; i++) {
     if (!/^Sintez[ăa]\b/i.test(lines[i])) continue;
     const window = lines.slice(i, i + 14).join(' ');
@@ -137,6 +147,32 @@ export function parseFootystatsRaw(text: string, teamName?: string): FootystatsE
       log(`✅ PPM Sinteză: ${decimals[0]}`);
     }
     break;
+  }
+
+  // --- MJ (meciuri jucate) din tabelul cu antet "MJ" ---
+  {
+    const mjHeader = joined.search(/\bMJ\b/);
+    if (mjHeader >= 0) {
+      const mjScope = joined.slice(mjHeader, mjHeader + 900);
+      const mjLabels: Array<{ key: 'sint' | 'home' | 'away'; rx: RegExp }> = [
+        { key: 'sint', rx: /Sintez[ăa]/i },
+        { key: 'home', rx: /Acas[ăa]/i },
+        { key: 'away', rx: /Deplasare/i },
+      ];
+      for (const { key, rx } of mjLabels) {
+        const m = rx.exec(mjScope);
+        if (!m) continue;
+        const win = mjScope.slice(m.index + m[0].length, m.index + m[0].length + 40);
+        // primul întreg (nu zecimal) după etichetă
+        const im = win.match(/\d{1,2}(?![\d.,])/);
+        if (!im) continue;
+        const mj = parseInt(im[0], 10);
+        if (mj < 1 || mj > 80) continue;
+        if (key === 'sint') { out.matchesPlayedSint = mj; log(`✅ MJ Sinteză: ${mj}`); }
+        else if (key === 'home') { out.matchesPlayedHome = mj; log(`✅ MJ Acasă: ${mj}`); }
+        else { out.matchesPlayedAway = mj; log(`✅ MJ Deplasare: ${mj}`); }
+      }
+    }
   }
 
   // --- xG (For) — header arată "xG (NumeEchipa)", NU "xG (Împotriva)" ---
