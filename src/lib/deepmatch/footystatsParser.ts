@@ -331,7 +331,7 @@ export function applyGeneral(p: FootystatsExtract, base: ParsedTeamStats): Parse
     formLast5: p.form5 ?? base.formLast5,
     goalsScored: p.goalsScoredSint ?? base.goalsScored,
     goalsConceded: p.goalsConcededSint ?? base.goalsConceded,
-    matchesPlayed: p.matchesPlayedSint ?? base.matchesPlayed,
+    matchesPlayed: p.matchesPlayedSint ?? base.matchesPlayed ?? p.matchesPlayedHome ?? p.matchesPlayedAway,
     ppm: p.ppmSint ?? base.ppm,
     // user rule: xG-ul echipei = xG simplu (NU Împotriva). xGA = xG Împotriva.
     xG: p.xgForSint ?? base.xG,
@@ -356,6 +356,7 @@ export function applyHome(p: FootystatsExtract, base: ParsedTeamStats): ParsedTe
     formHomeAway: p.form5 ?? base.formHomeAway,
     goalsScoredHome: p.goalsScoredHome ?? base.goalsScoredHome,
     goalsConcededHome: p.goalsConcededHome ?? base.goalsConcededHome,
+    matchesPlayed: base.matchesPlayed ?? p.matchesPlayedSint ?? p.matchesPlayedHome,
     // cornere ACASĂ/meci → din secțiunea Acasă
     cornersPerMatchHome: p.cornersForPerMatch ?? base.cornersPerMatchHome,
     shotsOnTargetHome: p.shotsOnTargetPerMatch ?? base.shotsOnTargetHome,
@@ -369,6 +370,7 @@ export function applyAway(p: FootystatsExtract, base: ParsedTeamStats): ParsedTe
     formHomeAway: p.form5 ?? base.formHomeAway,
     goalsScoredAway: p.goalsScoredAway ?? base.goalsScoredAway,
     goalsConcededAway: p.goalsConcededAway ?? base.goalsConcededAway,
+    matchesPlayed: base.matchesPlayed ?? p.matchesPlayedSint ?? p.matchesPlayedAway,
     // cornere DEPLASARE/meci → din secțiunea Deplasare
     cornersPerMatchAway: p.cornersForPerMatch ?? base.cornersPerMatchAway,
     shotsOnTargetAway: p.shotsOnTargetPerMatch ?? base.shotsOnTargetAway,
