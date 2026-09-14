@@ -42,6 +42,20 @@ Deno.serve(async (req) => {
     });
 
     if (createErr || !created.user) {
+      // Account may already exist in auth (profile row missing/not yet visible) — not fatal.
+      const { data: list } = await admin.auth.admin.listUsers();
+      const existing = list?.users?.find((u) => u.email === OWNER_EMAIL);
+      if (existing) {
+        await admin.from("profiles").upsert({ id: existing.id, username: OWNER_USERNAME });
+        await admin.from("user_roles").upsert(
+          { user_id: existing.id, role: "owner" },
+          { onConflict: "user_id,role" },
+        );
+        return new Response(
+          JSON.stringify({ ok: true, status: "already_seeded" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       return new Response(
         JSON.stringify({ ok: false, error: createErr?.message ?? "create failed" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },

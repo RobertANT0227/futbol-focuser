@@ -13,16 +13,6 @@ const Auth = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [seedAttempted, setSeedAttempted] = useState(false);
-
-  // Auto-seed owner once on first load
-  useEffect(() => {
-    if (seedAttempted) return;
-    setSeedAttempted(true);
-    supabase.functions.invoke("seed-owner").catch(() => {
-      // silent
-    });
-  }, [seedAttempted]);
 
   useEffect(() => {
     if (!loading && session) {
