@@ -26,7 +26,7 @@ const Auth = () => {
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("login-guarded", {
-        body: { username: username.trim(), password },
+        body: { username: username.trim(), password: password.trim() },
       });
 
       if (error || !data?.ok) {
