@@ -73,7 +73,7 @@ const Index = () => {
             selection: r.selection,
             category: r.category,
             odds: r.odds,
-            winRate: r.winRate,
+            modelProb: r.modelProbability * 100,
             ev: r.ev,
             value: r.value,
             stakeConfidence: r.stakeConfidence,

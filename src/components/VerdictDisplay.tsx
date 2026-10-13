@@ -29,10 +29,10 @@ interface Props {
 }
 
 export function VerdictDisplay({ result, homeTeamName, awayTeamName }: Props) {
-  // Sort by EV desc (then WR) — only positive-value bets become "Top Bets"
+  // Sort by EV desc — only positive-value bets become "Top Bets"
   const valueBets = result.recommendations
     .filter((r) => r.value > 0)
-    .sort((a, b) => b.ev - a.ev || b.winRate - a.winRate);
+    .sort((a, b) => b.ev - a.ev);
   const otherBets = result.recommendations.filter((r) => r.value <= 0);
   const matchLabel = `${homeTeamName} vs ${awayTeamName}`;
 

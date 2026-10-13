@@ -29,12 +29,18 @@ export interface TeamStats {
   leaguePosition: number;
   totalTeamsInLeague: number;
   gkSaves: number;
+  /** Cornere concedate (primite) /meci — opțional. */
+  cornersAgainstPerMatch?: number;
 }
 
 export interface MatchData {
   homeTeam: TeamStats;
   awayTeam: TeamStats;
   league: string;
+  /** Media goluri marcate de gazde în ligă (default 1.50). */
+  leagueAvgHomeGoals: number;
+  /** Media goluri marcate de oaspeți în ligă (default 1.20). */
+  leagueAvgAwayGoals: number;
   oddsHome: number;
   oddsDraw: number;
   oddsAway: number;
@@ -82,14 +88,15 @@ export interface BetRecommendation {
   stability: number;
   risk: 'low' | 'medium' | 'high';
   tipsterTier: 'tipster' | 'tipster_premium';
-  winRate: number;
   aiExplanation: string;
-  // Fixed-stake (1%–5%) confidence-based system
+  // Confidence-based stake, capped by fractional Kelly
   stakeConfidence: 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
-  stakePct: number;     // 0.01 .. 0.05
+  stakePct: number;     // 0 .. maxStakePctPerBet
   stakeLei: number;     // computed from current bankroll
   ev: number;           // expected value (decimal): prob*odds - 1
   fragile: boolean;
+  /** Value > maxRecommendedValue: probabil eroare de model. */
+  suspect?: boolean;
 }
 
 export interface AnalysisResult {
@@ -104,7 +111,6 @@ export interface AnalysisResult {
   bttsProb: number;
   expectedCorners: number;
   recommendations: BetRecommendation[];
-  monteCarloResults: MonteCarloResult;
   styleAnalysis: string;
   motivationAnalysis: string;
   analysisSteps: AnalysisStep[];
@@ -116,18 +122,6 @@ export interface AnalysisStep {
   title: string;
   description: string;
   data?: Record<string, string | number>;
-}
-
-export interface MonteCarloResult {
-  homeWinPct: number;
-  drawPct: number;
-  awayWinPct: number;
-  over25Pct: number;
-  bttsPct: number;
-  avgHomeGoals: number;
-  avgAwayGoals: number;
-  avgCorners: number;
-  scoreDistribution: Record<string, number>;
 }
 
 export interface DailyMatch {
