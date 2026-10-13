@@ -1,11 +1,11 @@
 export type ConfidenceLevel = 'VERY_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
 
 export const CONFIDENCE_STAKE_PCT: Record<ConfidenceLevel, number> = {
-  VERY_LOW: 0.01,   // 1%
-  LOW: 0.02,        // 2%
-  MEDIUM: 0.03,     // 3%
-  HIGH: 0.04,       // 4%
-  VERY_HIGH: 0.05,  // 5%
+  VERY_LOW: 0.005,  // 0.5%
+  LOW: 0.01,        // 1%
+  MEDIUM: 0.015,    // 1.5%
+  HIGH: 0.02,       // 2%
+  VERY_HIGH: 0.03,  // 3%
 };
 
 export const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
@@ -28,7 +28,7 @@ export interface BetRecord {
   profit: number;
   bankrollAfter: number;
   date: string;
-  winRate: number; // estimated WR from analysis
+  modelProb: number; // model probability (%) from analysis
 }
 
 export interface BankrollState {
@@ -80,7 +80,7 @@ export interface SyncedTopBet {
   selection: string;
   category: 'corners' | 'winner' | 'goals';
   odds: number;
-  winRate: number;
+  modelProb: number;
   ev: number;
   value: number;
   stakeConfidence: ConfidenceLevel;
@@ -108,8 +108,8 @@ export function clearSyncedTopBets() {
   localStorage.removeItem(TOP_BETS_KEY);
 }
 
-export function calculateKelly(winRate: number, odds: number): number {
-  const p = winRate / 100;
+export function calculateKelly(modelProb: number, odds: number): number {
+  const p = modelProb / 100;
   const q = 1 - p;
   const b = odds - 1;
   if (b <= 0) return 0;
@@ -119,12 +119,12 @@ export function calculateKelly(winRate: number, odds: number): number {
 
 export function calculateStake(
   bankroll: number,
-  winRate: number,
+  modelProb: number,
   odds: number,
   risk: 'LOW' | 'MEDIUM' | 'HIGH',
   stakeModifier: number
 ): number {
-  const kelly = calculateKelly(winRate, odds);
+  const kelly = calculateKelly(modelProb, odds);
   const factor = RISK_FACTOR[risk];
   const stake = bankroll * kelly * factor * stakeModifier;
   return Math.max(0, Math.round(stake * 100) / 100);
@@ -148,13 +148,13 @@ export function calculateConfidenceStake(
  */
 export function deriveConfidence(args: {
   modelConfidence: 'high' | 'medium' | 'low';
-  winRate: number;
+  modelProb: number;
   value: number;
   stability: number;
   risk: 'low' | 'medium' | 'high';
   fragile?: boolean;
 }): ConfidenceLevel {
-  const { modelConfidence, winRate, value, stability, risk, fragile } = args;
+  const { modelConfidence, modelProb, value, stability, risk, fragile } = args;
 
   const cap = (lvl: ConfidenceLevel): ConfidenceLevel => {
     if (!fragile) return lvl;
@@ -162,10 +162,10 @@ export function deriveConfidence(args: {
     return lvl;
   };
 
-  if (stability < 0.35 || risk === 'high' || winRate < 55) return cap('VERY_LOW');
-  if (modelConfidence === 'high' && winRate >= 80 && stability >= 0.7 && value >= 8 && risk === 'low') return cap('VERY_HIGH');
-  if (modelConfidence === 'high' && winRate >= 75 && stability >= 0.6 && value >= 5) return cap('HIGH');
-  if (winRate >= 65 && value >= 3) return cap('MEDIUM');
+  if (stability < 0.35 || risk === 'high' || modelProb < 55) return cap('VERY_LOW');
+  if (modelConfidence === 'high' && modelProb >= 80 && stability >= 0.7 && value >= 8 && risk === 'low') return cap('VERY_HIGH');
+  if (modelConfidence === 'high' && modelProb >= 75 && stability >= 0.6 && value >= 5) return cap('HIGH');
+  if (modelProb >= 65 && value >= 3) return cap('MEDIUM');
   return cap('LOW');
 }
 
@@ -175,7 +175,7 @@ export function addBet(
   odds: number,
   result: 'WIN' | 'LOSS',
   risk: 'LOW' | 'MEDIUM' | 'HIGH',
-  winRate: number,
+  modelProb: number,
   confidence: ConfidenceLevel = 'MEDIUM'
 ): BankrollState {
   const { pct, lei: stake } = calculateConfidenceStake(state.currentBankroll, confidence, state.stakeModifier);
@@ -202,7 +202,7 @@ export function addBet(
     profit: Math.round(profit * 100) / 100,
     bankrollAfter,
     date: new Date().toISOString(),
-    winRate,
+    modelProb,
   };
 
   const newState: BankrollState = {

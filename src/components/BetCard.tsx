@@ -80,7 +80,7 @@ export function BetCard({ bet, matchLabel, rank, compact = false }: Props) {
       {/* Metrics grid */}
       <div className={`grid ${compact ? 'grid-cols-4' : 'grid-cols-2 md:grid-cols-5'} gap-2 text-xs`}>
         <Metric label="Cotă" value={bet.odds.toFixed(2)} mono />
-        <Metric label="WR" value={`${bet.winRate.toFixed(0)}%`} mono accent="primary" />
+        <Metric label="Probabilitate model" value={`${(bet.modelProbability * 100).toFixed(1)}%`} mono accent="primary" />
         <Metric
           label="EV"
           value={`${bet.ev > 0 ? '+' : ''}${(bet.ev * 100).toFixed(1)}%`}

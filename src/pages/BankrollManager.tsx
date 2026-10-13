@@ -81,7 +81,7 @@ const BankrollManager = () => {
   const [odds, setOdds] = useState('');
   const [result, setResult] = useState<'WIN' | 'LOSS'>('WIN');
   const [risk, setRisk] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('MEDIUM');
-  const [winRate, setWinRate] = useState('70');
+  const [modelProb, setModelProb] = useState('70');
   const [confidence, setConfidence] = useState<ConfidenceLevel>('MEDIUM');
 
   // Top bets synced from analysis page
@@ -103,21 +103,21 @@ const BankrollManager = () => {
   };
 
   const handleAddBet = () => {
-    if (!matchName || !odds || !winRate) return;
+    if (!matchName || !odds || !modelProb) return;
     const o = parseFloat(odds);
-    const wr = parseFloat(winRate);
+    const wr = parseFloat(modelProb);
     if (o <= 1 || wr <= 0 || wr > 100) return;
     const newState = addBet(state, matchName, o, result, risk, wr, confidence);
     setState(newState);
     setMatchName('');
     setOdds('');
-    setWinRate('70');
+    setModelProb('70');
   };
 
   const handlePrefillFromTopBet = (b: SyncedTopBet) => {
     setMatchName(`${b.matchLabel} — ${b.selection}`);
     setOdds(b.odds.toFixed(2));
-    setWinRate(b.winRate.toFixed(0));
+    setModelProb(b.modelProb.toFixed(0));
     setConfidence(b.stakeConfidence);
     setRisk(b.risk.toUpperCase() as 'LOW' | 'MEDIUM' | 'HIGH');
   };
@@ -312,7 +312,7 @@ const BankrollManager = () => {
                       type: '',
                       category: b.category,
                       selection: b.selection,
-                      modelProbability: 0,
+                      modelProbability: (b.modelProb ?? 0) / 100,
                       bookmakerProbability: 0,
                       value: b.value,
                       odds: b.odds,
@@ -322,7 +322,6 @@ const BankrollManager = () => {
                       stability: 0,
                       risk: b.risk,
                       tipsterTier: 'tipster',
-                      winRate: b.winRate,
                       aiExplanation: '',
                       stakeConfidence: b.stakeConfidence,
                       stakePct: live.pct,
@@ -380,11 +379,11 @@ const BankrollManager = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">WR estimat (%)</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">Probabilitate model (%)</label>
                   <Input
                     type="number"
-                    value={winRate}
-                    onChange={e => setWinRate(e.target.value)}
+                    value={modelProb}
+                    onChange={e => setModelProb(e.target.value)}
                     placeholder="80"
                     className="bg-secondary border-border"
                   />

@@ -37,7 +37,7 @@ export function HowItWorks({ steps, result }: Props) {
                   {result.bestBet.aiExplanation}
                 </p>
                 <div className="text-xs text-muted-foreground font-mono">
-                  Best Bet: <span className="text-primary font-bold">{result.bestBet.selection}</span> @ {result.bestBet.odds.toFixed(2)} — WR: {result.bestBet.winRate.toFixed(1)}%
+                  Best Bet: <span className="text-primary font-bold">{result.bestBet.selection}</span> @ {result.bestBet.odds.toFixed(2)} — Probabilitate model: {(result.bestBet.modelProbability * 100).toFixed(1)}%
                 </div>
               </div>
             )}

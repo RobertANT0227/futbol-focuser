@@ -13,7 +13,7 @@ interface Props {
 export function DailyTop({ matches, onClear }: Props) {
   if (matches.length === 0) return null;
 
-  // Collect best bet from each match, sorted by WR
+  // Collect best bet from each match, sorted by EV
   const topBets: { bet: BetRecommendation; matchLabel: string; league: string }[] = [];
   for (const dm of matches) {
     const label = `${dm.match.homeTeam.name} vs ${dm.match.awayTeam.name}`;
@@ -22,7 +22,7 @@ export function DailyTop({ matches, onClear }: Props) {
     }
   }
 
-  topBets.sort((a, b) => b.bet.winRate - a.bet.winRate);
+  topBets.sort((a, b) => b.bet.ev - a.bet.ev);
 
   const categoryIcon = (cat: string) => {
     switch (cat) {
@@ -73,10 +73,10 @@ export function DailyTop({ matches, onClear }: Props) {
                 </div>
               </div>
               <div className="text-right space-y-1">
-                <div className={`text-lg font-bold font-mono ${item.bet.winRate >= 76 ? 'text-primary' : 'text-accent'}`}>
-                  {item.bet.winRate.toFixed(1)}%
+                <div className={`text-lg font-bold font-mono ${item.bet.modelProbability >= 0.6 ? 'text-primary' : 'text-accent'}`}>
+                  {(item.bet.modelProbability * 100).toFixed(1)}%
                 </div>
-                <div className="text-[10px] text-muted-foreground">Win Rate</div>
+                <div className="text-[10px] text-muted-foreground">Probabilitate model</div>
               </div>
               <div className="text-right font-mono text-xs space-y-0.5 min-w-[80px]">
                 <div>Cotă: <span className="font-bold">{item.bet.odds.toFixed(2)}</span></div>

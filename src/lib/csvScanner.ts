@@ -165,7 +165,7 @@ export interface ScannedBet {
   category: BetRecommendation['category'];
   betType: string;
   odds: number;
-  winRate: number;
+  modelProb: number;
   ev: number;
   value: number;
   risk: BetRecommendation['risk'];
@@ -211,7 +211,7 @@ export function scanMatches(matches: { match: MatchData }[]): ScannedBet[] {
         category: r.category,
         betType: r.type,
         odds: r.odds,
-        winRate: r.winRate,
+        modelProb: r.modelProbability * 100,
         ev: r.ev,
         value: r.value,
         risk: r.risk,
@@ -273,7 +273,7 @@ export function betsToCsv(bets: ScannedBet[]): string {
       Selection: b.selection,
       Category: b.category,
       Odds: b.odds.toFixed(2),
-      'WR%': b.winRate.toFixed(1),
+      'Prob model%': b.modelProb.toFixed(1),
       'EV%': (b.ev * 100).toFixed(2),
       'Value%': b.value.toFixed(2),
       Risk: b.risk,

@@ -52,7 +52,7 @@ export function PickStakePlan({ bankroll }: { bankroll: number }) {
         </CardTitle>
         <div className="text-xs text-muted-foreground">
           {sel && <span className="font-medium text-foreground">{sel}</span>}
-          {sel && ' · '}WR model {(prob * 100).toFixed(0)}%
+          {sel && ' · '}Probabilitate model {(prob * 100).toFixed(0)}%
           {odds ? ` · cota ${odds.toFixed(2)}` : ' · fără cotă'}
           {' · '}bancă {bankroll.toFixed(2)} LEI
         </div>
