@@ -46,7 +46,7 @@ export function defaultMatch(): MatchData {
   return {
     homeTeam: defaultTeam('Echipa Gazdă'),
     awayTeam: defaultTeam('Echipa Oaspete'),
-    league: '',
+    league: '', leagueAvgHomeGoals: 1.5, leagueAvgAwayGoals: 1.2,
     oddsHome: 2.0, oddsDraw: 3.3, oddsAway: 3.5,
     oddsOver25: 1.85, oddsUnder25: 2.0,
     oddsBTTSYes: 1.8, oddsBTTSNo: 2.0,
