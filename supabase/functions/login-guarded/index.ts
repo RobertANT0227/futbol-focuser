@@ -23,8 +23,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}));
     const username = String(body.username ?? "").trim();
-    const normalizedUsername = username.toLowerCase();
-    const password = String(body.password ?? "").trim();
+    const password = String(body.password ?? "");
 
     if (!username || !password || username.length > 64 || password.length > 128) {
       return new Response(
@@ -42,7 +41,7 @@ Deno.serve(async (req) => {
     const { data: profile } = await admin
       .from("profiles")
       .select("id, username")
-      .ilike("username", normalizedUsername)
+      .eq("username", username)
       .maybeSingle();
 
     // Check if owner (no rate limit)
@@ -82,7 +81,7 @@ Deno.serve(async (req) => {
       const { data: recent } = await admin
         .from("login_attempts")
         .select("success, attempted_at")
-        .ilike("username", normalizedUsername)
+        .eq("username", username)
         .gte("attempted_at", cutoff)
         .order("attempted_at", { ascending: false });
 
@@ -113,8 +112,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
     );
+    const email = profile ? `${profile.id}@_lookup` : usernameToEmail(username);
     // Use the canonical email derived from username (since we control account creation)
-    const loginEmail = usernameToEmail(normalizedUsername);
+    const loginEmail = usernameToEmail(username);
     const { data: signin, error: signinErr } = await anon.auth.signInWithPassword({
       email: loginEmail,
       password,
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
 
     if (signinErr || !signin.session) {
       // Log failed attempt
-      await admin.from("login_attempts").insert({ username: normalizedUsername, success: false });
+      await admin.from("login_attempts").insert({ username, success: false });
       return new Response(
         JSON.stringify({ ok: false, error: "invalid_credentials", message: "Username sau parolă incorectă." }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
     }
 
     // Log success
-    await admin.from("login_attempts").insert({ username: normalizedUsername, success: true });
+    await admin.from("login_attempts").insert({ username, success: true });
 
     return new Response(
       JSON.stringify({

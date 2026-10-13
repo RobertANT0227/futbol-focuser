@@ -1,4 +1,4 @@
-import { Activity, ExternalLink, BarChart3, FlaskConical, Home, Flame, Settings as SettingsIcon } from "lucide-react";
+import { BarChart3, FlaskConical, Home, Flame, Settings as SettingsIcon } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,13 +20,11 @@ type Item = {
   hash?: string;
   ownerOnly?: boolean;
   premiumOnly?: boolean;
-  separateWindow?: boolean;
 };
 
 const allItems: Item[] = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Analiză Meciuri", url: "/", icon: FlaskConical, hash: "#analiza" },
-  { title: "Tipster Premium Live", url: "/tipster-live", icon: Activity, separateWindow: true },
   { title: "Bankroll Manager", url: "/bankroll", icon: BarChart3, premiumOnly: true },
   { title: "Top Bets", url: "/bankroll", icon: Flame, hash: "#top-bets", premiumOnly: true },
   { title: "Settings", url: "/settings", icon: SettingsIcon, ownerOnly: true },
@@ -66,7 +64,7 @@ export function AppSidebar() {
               {navItems.map((item) => (
                 <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton asChild className="h-10">
-                    {item.separateWindow ? <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 rounded-md hover:bg-muted/50 transition-colors" title="Deschide Tipster Premium Live separat"><item.icon className="h-4 w-4 shrink-0" />{!collapsed && <><span className="text-sm">{item.title}</span><ExternalLink className="size-3 shrink-0 ml-auto" /></>}</a> : <NavLink
+                    <NavLink
                       to={`${item.url}${item.hash ?? ''}`}
                       end={!item.hash}
                       className="flex items-center gap-3 px-3 rounded-md hover:bg-muted/50 transition-colors"
@@ -74,7 +72,7 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       {!collapsed && <span className="text-sm">{item.title}</span>}
-                    </NavLink>}
+                    </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

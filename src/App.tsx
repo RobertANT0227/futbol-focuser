@@ -12,7 +12,6 @@ import NotFound from "./pages/NotFound.tsx";
 import BankrollManager from "./pages/BankrollManager.tsx";
 import Auth from "./pages/Auth.tsx";
 import Settings from "./pages/Settings.tsx";
-import TipsterLive from "./pages/TipsterLive.tsx";
 
 const queryClient = new QueryClient();
 
@@ -65,7 +64,6 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-            <Route path="/tipster-live" element={<ProtectedRoute><TipsterLive /></ProtectedRoute>} />
             <Route
               path="/"
               element={
