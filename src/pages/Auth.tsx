@@ -30,8 +30,17 @@ const Auth = () => {
       });
 
       if (error || !data?.ok) {
-        const msg = data?.message || error?.message || "Autentificare eșuată";
-        toast({ title: "Eroare", description: msg, variant: "destructive" });
+        let msg = data?.message as string | undefined;
+        const ctx = (error as { context?: Response } | null)?.context;
+        if (!msg && ctx && typeof ctx.json === "function") {
+          try {
+            const body = await ctx.json();
+            msg = body?.message;
+          } catch {
+            /* ignore */
+          }
+        }
+        toast({ title: "Eroare", description: msg || "Autentificare eșuată", variant: "destructive" });
         return;
       }
 
