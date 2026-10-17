@@ -25,7 +25,9 @@ export interface TeamStats {
   cards: number;
   cardsPerMatch: number;
   fouls: number;
-  playStyle: 'possession' | 'counter' | 'pressing' | 'low-block' | 'bus-parking' | 'high-press';
+  playStyle: 'possession' | 'counter' | 'pressing' | 'low-block' | 'bus-parking' | 'high-press' | 'unknown';
+  /** 'auto' = stil dedus din posesie; 'manual' = stilul ales de utilizator. */
+  playStyleMode?: 'auto' | 'manual';
   leaguePosition: number;
   totalTeamsInLeague: number;
   gkSaves: number;
@@ -79,6 +81,10 @@ export interface BetRecommendation {
   category: 'corners' | 'winner' | 'goals';
   selection: string;
   modelProbability: number;
+  /** Probabilitate amestec (model + piață): wModel·pModel + (1−wModel)·pFair. */
+  blendedProbability: number;
+  /** Încredere în date: minN/(minN+shrinkK). */
+  reliability: number;
   bookmakerProbability: number;
   value: number;
   odds: number;
